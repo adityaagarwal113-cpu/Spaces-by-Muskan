@@ -2,6 +2,19 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { DEFAULT_CMS_DATA, DEFAULT_COMPARISON_CASES } from '../data/defaultCmsData';
 import { resolveAccentColors, resolveTypographyPreset } from '../data/visualBrandingPresets';
 import {
+  fetchPublicCmsFromFirestore,
+  subscribePublicCms,
+} from '../utils/firebaseCmsService';
+import {
+  DRAFT_PREVIEW_KEY,
+  PREVIEW_ACTIVE_SESSION_KEY,
+  PREVIEW_BROADCAST_CHANNEL,
+  hydrateCmsStore,
+  mergeSiteConfigSafe,
+  readDraftPreviewStore,
+} from '../utils/localCmsFallback';
+import {
+  CmsStoreData,
   CraftDetail,
   DrawingComparisonCase,
   ProcessStep,
@@ -9,6 +22,8 @@ import {
   ServiceItem,
   StudioSiteConfig,
 } from '../types';
+
+const SWR_CACHE_KEY = 'sbm_cms_firestore_swr_v1';
 
 interface CmsContextValue {
   siteConfig: StudioSiteConfig;
@@ -18,83 +33,217 @@ interface CmsContextValue {
   craftDetails: CraftDetail[];
   comparisonCases: DrawingComparisonCase[];
   isLoaded: boolean;
+  isPreviewMode: boolean;
+  syncSource: 'firestore' | 'preview' | 'default';
   lastSyncedAt: string;
   refreshCms: () => Promise<void>;
+  exitPreviewMode: () => void;
   updateSiteConfigLocal: (patch: Partial<StudioSiteConfig>) => void;
 }
 
+function detectPreviewQueryOrSession(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('preview') === '1') {
+      window.sessionStorage?.setItem(PREVIEW_ACTIVE_SESSION_KEY, '1');
+      return true;
+    }
+    return window.sessionStorage?.getItem(PREVIEW_ACTIVE_SESSION_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function readInitialSwrStore(previewActive: boolean): CmsStoreData {
+  if (previewActive) {
+    const draft = readDraftPreviewStore();
+    if (draft) return draft;
+  }
+  try {
+    const raw = localStorage.getItem(SWR_CACHE_KEY);
+    if (!raw) return hydrateCmsStore(DEFAULT_CMS_DATA);
+    const parsed = JSON.parse(raw) as Partial<CmsStoreData>;
+    return hydrateCmsStore(parsed);
+  } catch {
+    return hydrateCmsStore(DEFAULT_CMS_DATA);
+  }
+}
+
+function writeSwrStore(store: CmsStoreData): void {
+  try {
+    localStorage.setItem(
+      SWR_CACHE_KEY,
+      JSON.stringify({
+        siteConfig: store.siteConfig,
+        projects: store.projects,
+        services: store.services,
+        processSteps: store.processSteps,
+        craftDetails: store.craftDetails,
+        comparisonCases: store.comparisonCases,
+        updatedAt: store.updatedAt,
+      })
+    );
+  } catch {
+    // Ignore storage quota issues cleanly
+  }
+}
+
+const initialPreviewActive = detectPreviewQueryOrSession();
+const initialSeed = readInitialSwrStore(initialPreviewActive);
+
 const CmsContext = createContext<CmsContextValue>({
-  siteConfig: DEFAULT_CMS_DATA.siteConfig,
-  projects: DEFAULT_CMS_DATA.projects,
-  services: DEFAULT_CMS_DATA.services,
-  processSteps: DEFAULT_CMS_DATA.processSteps,
-  craftDetails: DEFAULT_CMS_DATA.craftDetails,
-  comparisonCases: DEFAULT_COMPARISON_CASES,
+  siteConfig: initialSeed.siteConfig,
+  projects: initialSeed.projects.filter((p) => p.status !== 'draft'),
+  services: initialSeed.services.filter((s) => s.status !== 'draft'),
+  processSteps: initialSeed.processSteps.filter((step) => step.status !== 'draft'),
+  craftDetails: initialSeed.craftDetails,
+  comparisonCases: initialSeed.comparisonCases || DEFAULT_COMPARISON_CASES,
   isLoaded: false,
-  lastSyncedAt: DEFAULT_CMS_DATA.updatedAt,
+  isPreviewMode: initialPreviewActive,
+  syncSource: initialPreviewActive ? 'preview' : 'default',
+  lastSyncedAt: initialSeed.updatedAt,
   refreshCms: async () => {},
+  exitPreviewMode: () => {},
   updateSiteConfigLocal: () => {},
 });
 
 export const CmsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [siteConfig, setSiteConfig] = useState<StudioSiteConfig>(DEFAULT_CMS_DATA.siteConfig);
-  const [projects, setProjects] = useState<ProjectDetail[]>(DEFAULT_CMS_DATA.projects);
-  const [services, setServices] = useState<ServiceItem[]>(DEFAULT_CMS_DATA.services);
-  const [processSteps, setProcessSteps] = useState<ProcessStep[]>(DEFAULT_CMS_DATA.processSteps);
-  const [craftDetails, setCraftDetails] = useState<CraftDetail[]>(DEFAULT_CMS_DATA.craftDetails);
+  const [isPreviewMode, setIsPreviewMode] = useState<boolean>(() =>
+    detectPreviewQueryOrSession()
+  );
+  const [siteConfig, setSiteConfig] = useState<StudioSiteConfig>(initialSeed.siteConfig);
+  const [projects, setProjects] = useState<ProjectDetail[]>(() =>
+    initialSeed.projects.filter((p) => p.status !== 'draft')
+  );
+  const [services, setServices] = useState<ServiceItem[]>(() =>
+    initialSeed.services.filter((s) => s.status !== 'draft')
+  );
+  const [processSteps, setProcessSteps] = useState<ProcessStep[]>(() =>
+    initialSeed.processSteps.filter((step) => step.status !== 'draft')
+  );
+  const [craftDetails, setCraftDetails] = useState<CraftDetail[]>(initialSeed.craftDetails);
   const [comparisonCases, setComparisonCases] = useState<DrawingComparisonCase[]>(
-    DEFAULT_COMPARISON_CASES
+    initialSeed.comparisonCases || DEFAULT_COMPARISON_CASES
   );
   const [isLoaded, setIsLoaded] = useState(false);
-  const [lastSyncedAt, setLastSyncedAt] = useState(DEFAULT_CMS_DATA.updatedAt);
+  const [syncSource, setSyncSource] = useState<'firestore' | 'preview' | 'default'>(
+    initialPreviewActive ? 'preview' : 'default'
+  );
+  const [lastSyncedAt, setLastSyncedAt] = useState(initialSeed.updatedAt);
+
+  const applyStoreSnapshot = useCallback(
+    (store: CmsStoreData, source: 'firestore' | 'preview' | 'default') => {
+      setSiteConfig(mergeSiteConfigSafe(store.siteConfig));
+      setProjects(store.projects.filter((p) => p.status !== 'draft'));
+      setServices(store.services.filter((s) => s.status !== 'draft'));
+      setProcessSteps(store.processSteps.filter((step) => step.status !== 'draft'));
+      setCraftDetails(store.craftDetails);
+      setComparisonCases(store.comparisonCases || DEFAULT_COMPARISON_CASES);
+      setLastSyncedAt(store.updatedAt);
+      setSyncSource(source);
+      setIsLoaded(true);
+      if (source === 'firestore') {
+        writeSwrStore(store);
+      }
+    },
+    []
+  );
 
   const refreshCms = useCallback(async () => {
-    try {
-      const res = await fetch('/api/cms', { cache: 'no-store' });
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.siteConfig) {
-        const base = DEFAULT_CMS_DATA.siteConfig;
-        const incoming = data.siteConfig as Partial<StudioSiteConfig>;
-        setSiteConfig({
-          ...base,
-          ...incoming,
-          customAccentColors: {
-            ...base.customAccentColors!,
-            ...(incoming.customAccentColors || {}),
-          },
-          navLabels: { ...base.navLabels!, ...(incoming.navLabels || {}) },
-          promoPopup: { ...base.promoPopup!, ...(incoming.promoPopup || {}) },
-          announcementTicker: { ...base.announcementTicker!, ...(incoming.announcementTicker || {}) },
-          homepageSections:
-            Array.isArray(incoming.homepageSections) && incoming.homepageSections.length > 0
-              ? incoming.homepageSections
-              : base.homepageSections,
-        });
+    if (isPreviewMode) {
+      const draft = readDraftPreviewStore();
+      if (draft) {
+        applyStoreSnapshot(draft, 'preview');
+        return;
       }
-      if (Array.isArray(data.projects)) {
-        setProjects(data.projects);
-      }
-      if (Array.isArray(data.services)) {
-        setServices(data.services);
-      }
-      if (Array.isArray(data.processSteps)) {
-        setProcessSteps(data.processSteps);
-      }
-      if (Array.isArray(data.craftDetails)) {
-        setCraftDetails(data.craftDetails);
-      }
-      if (Array.isArray(data.comparisonCases)) {
-        setComparisonCases(data.comparisonCases);
-      }
-      if (data.updatedAt) {
-        setLastSyncedAt(data.updatedAt);
-      }
-      setIsLoaded(true);
-    } catch {
-      // Keep default seeded fallback seamlessly if server is starting up
     }
-  }, []);
+    try {
+      const { store, existsInFirestore } = await fetchPublicCmsFromFirestore();
+      applyStoreSnapshot(store, existsInFirestore ? 'firestore' : 'default');
+    } catch {
+      setIsLoaded(true);
+    }
+  }, [applyStoreSnapshot, isPreviewMode]);
+
+  const exitPreviewMode = useCallback(() => {
+    try {
+      window.sessionStorage?.removeItem(PREVIEW_ACTIVE_SESSION_KEY);
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('preview')) {
+        url.searchParams.delete('preview');
+        window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+      }
+    } catch {
+      // Ignore URL cleanup errors
+    }
+    setIsPreviewMode(false);
+    void fetchPublicCmsFromFirestore()
+      .then(({ store, existsInFirestore }) => {
+        applyStoreSnapshot(store, existsInFirestore ? 'firestore' : 'default');
+      })
+      .catch(() => {
+        applyStoreSnapshot(hydrateCmsStore(DEFAULT_CMS_DATA), 'default');
+      });
+  }, [applyStoreSnapshot]);
+
+  useEffect(() => {
+    if (isPreviewMode) {
+      const draft = readDraftPreviewStore();
+      if (draft) {
+        applyStoreSnapshot(draft, 'preview');
+      }
+
+      const handleStorage = (e: StorageEvent) => {
+        if (e.key === DRAFT_PREVIEW_KEY) {
+          const updated = readDraftPreviewStore();
+          if (updated) {
+            applyStoreSnapshot(updated, 'preview');
+          }
+        }
+      };
+
+      window.addEventListener('storage', handleStorage);
+
+      let channel: BroadcastChannel | null = null;
+      if (typeof BroadcastChannel !== 'undefined') {
+        channel = new BroadcastChannel(PREVIEW_BROADCAST_CHANNEL);
+        channel.onmessage = () => {
+          const updated = readDraftPreviewStore();
+          if (updated) {
+            applyStoreSnapshot(updated, 'preview');
+          }
+        };
+      }
+
+      const unsubscribeFirestore = subscribePublicCms(
+        (store, fromServer) => {
+          if (!readDraftPreviewStore()) {
+            applyStoreSnapshot(store, fromServer ? 'firestore' : 'default');
+          }
+        },
+        () => {
+          setIsLoaded(true);
+        }
+      );
+
+      return () => {
+        window.removeEventListener('storage', handleStorage);
+        channel?.close();
+        unsubscribeFirestore();
+      };
+    }
+
+    const unsubscribe = subscribePublicCms(
+      (store, fromServer) => {
+        applyStoreSnapshot(store, fromServer ? 'firestore' : 'default');
+      },
+      () => {
+        setIsLoaded(true);
+      }
+    );
+    return () => unsubscribe();
+  }, [applyStoreSnapshot, isPreviewMode]);
 
   const updateSiteConfigLocal = useCallback((patch: Partial<StudioSiteConfig>) => {
     setSiteConfig((prev) => ({
@@ -106,10 +255,6 @@ export const CmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       },
     }));
   }, []);
-
-  useEffect(() => {
-    void refreshCms();
-  }, [refreshCms]);
 
   useEffect(() => {
     const activeAccent = siteConfig.accentTheme || 'terracotta';
@@ -146,8 +291,11 @@ export const CmsProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         craftDetails,
         comparisonCases,
         isLoaded,
+        isPreviewMode,
+        syncSource,
         lastSyncedAt,
         refreshCms,
+        exitPreviewMode,
         updateSiteConfigLocal,
       }}
     >

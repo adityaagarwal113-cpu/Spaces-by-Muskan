@@ -165,6 +165,7 @@ export interface StudioSiteConfig {
   responseCommitmentText: string;
 
   // Brand Visual Style & Navigation Controls
+  requireAdminLogin?: boolean;
   accentTheme?: AccentThemePreset;
   customAccentColors?: CustomAccentColors;
   typographyPreset?: TypographyPreset;
@@ -275,12 +276,17 @@ export interface EnquiryOrder {
 }
 
 export interface MediaItem {
+  id?: string;
   filename: string;
   url: string;
   webpUrl?: string;
+  thumbUrl?: string;
   optimized?: boolean;
   source: 'muskan' | 'uploads';
   sizeBytes: number;
+  originalSizeBytes?: number;
+  width?: number;
+  height?: number;
   updatedAt: string;
 }
 
@@ -290,10 +296,11 @@ export interface StorageStats {
   uploadsCount: number;
   archiveCount: number;
   usedBytes: number;
+  originalBytesSaved?: number;
   freeBytes: number;
   totalDiskBytes: number;
   maxUploadMb: number;
-  storageMode: 'local-server-disk';
+  storageMode: 'firebase-firestore' | 'local-server-disk';
 }
 
 export interface CmsStoreData {

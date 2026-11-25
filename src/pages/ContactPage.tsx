@@ -4,6 +4,8 @@ import { Send, CheckCircle2, MessageCircle, MapPin, Phone, Mail, Instagram, Yout
 import { useCms } from '../context/CmsContext';
 import { PageTransition } from '../components/PageTransition';
 import { SEO } from '../components/SEO';
+import { submitEnquiryToFirestore } from '../utils/firebaseCmsService';
+import { addBrowserEnquiry } from '../utils/localCmsFallback';
 
 export const ContactPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -56,30 +58,21 @@ export const ContactPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const payload = {
+      name: formData.name,
+      phone: formData.phone,
+      email: formData.email,
+      projectType: formData.projectType,
+      location: formData.location,
+      budget: formData.budget,
+      brief: formData.message,
+    };
     try {
-      const res = await fetch('/api/enquiries', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.name,
-          phone: formData.phone,
-          email: formData.email,
-          projectType: formData.projectType,
-          location: formData.location,
-          budget: formData.budget,
-          brief: formData.message,
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSubmittedBriefId(
-          data.enquiry?.orderNumber || `SM-${Math.floor(1000 + Math.random() * 9000)}`
-        );
-      } else {
-        setSubmittedBriefId(`SM-${Math.floor(1000 + Math.random() * 9000)}`);
-      }
+      const saved = await submitEnquiryToFirestore(payload);
+      setSubmittedBriefId(saved.orderNumber);
     } catch {
-      setSubmittedBriefId(`SM-${Math.floor(1000 + Math.random() * 9000)}`);
+      const fallback = addBrowserEnquiry(payload);
+      setSubmittedBriefId(fallback.orderNumber);
     }
     setSubmitted(true);
   };

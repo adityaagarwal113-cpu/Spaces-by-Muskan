@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -30,6 +30,7 @@ import {
   StudioSiteConfig,
 } from '../../types';
 import { MediaPickerModal } from './MediaPickerModal';
+import { ResolvedImg } from '../OptimizedImage';
 
 interface AdminSiteEditorProps {
   siteConfig: StudioSiteConfig;
@@ -37,6 +38,7 @@ interface AdminSiteEditorProps {
   onSaveSite: (nextConfig: StudioSiteConfig) => Promise<void>;
   onUploadFile: (file: File) => Promise<MediaItem | null>;
   onDeleteMedia?: (item: MediaItem) => Promise<void>;
+  onDraftChange?: (draft: StudioSiteConfig) => void;
 }
 
 type ImageFieldKey =
@@ -93,15 +95,17 @@ export const AdminSiteEditor: React.FC<AdminSiteEditorProps> = ({
   onSaveSite,
   onUploadFile,
   onDeleteMedia,
+  onDraftChange,
 }) => {
   const [form, setForm] = useState<StudioSiteConfig>(siteConfig);
   const [saving, setSaving] = useState(false);
   const [activePicker, setActivePicker] = useState<SitePickerTarget | null>(null);
   const [dragSecIdx, setDragSecIdx] = useState<number | null>(null);
   const [dragOverSecIdx, setDragOverSecIdx] = useState<number | null>(null);
+  const baselineRef = useRef<string>(JSON.stringify(siteConfig));
 
   useEffect(() => {
-    setForm({
+    const hydrated: StudioSiteConfig = {
       ...DEFAULT_SITE_CONFIG,
       ...siteConfig,
       navLabels: {
@@ -112,8 +116,16 @@ export const AdminSiteEditor: React.FC<AdminSiteEditorProps> = ({
         Array.isArray(siteConfig.homepageSections) && siteConfig.homepageSections.length > 0
           ? siteConfig.homepageSections
           : DEFAULT_HOMEPAGE_SECTIONS,
-    });
+    };
+    baselineRef.current = JSON.stringify(hydrated);
+    setForm(hydrated);
   }, [siteConfig]);
+
+  useEffect(() => {
+    if (!onDraftChange) return;
+    if (JSON.stringify(form) === baselineRef.current) return;
+    onDraftChange(form);
+  }, [form, onDraftChange]);
 
   const sections =
     Array.isArray(form.homepageSections) && form.homepageSections.length > 0
@@ -206,8 +218,9 @@ export const AdminSiteEditor: React.FC<AdminSiteEditorProps> = ({
         </div>
         <div className="flex items-center gap-3">
           {currentVal ? (
-            <img
+            <ResolvedImg
               src={currentVal}
+              preferThumb
               alt={label}
               className="w-16 h-16 object-cover border border-[#C3C4C7] bg-white shrink-0"
             />
@@ -433,8 +446,9 @@ export const AdminSiteEditor: React.FC<AdminSiteEditorProps> = ({
                       </label>
                       <div className="aspect-[4/3] bg-white border border-[#C3C4C7] overflow-hidden flex items-center justify-center">
                         {sec.customImage ? (
-                          <img
+                          <ResolvedImg
                             src={sec.customImage}
+                            preferThumb
                             alt={sec.label}
                             className="w-full h-full object-cover"
                           />
@@ -1213,6 +1227,7 @@ interface AdminServicesEditorProps {
   onSaveServices: (next: ServiceItem[]) => Promise<void>;
   onUploadFile: (file: File) => Promise<MediaItem | null>;
   onDeleteMedia?: (item: MediaItem) => Promise<void>;
+  onDraftChange?: (draft: ServiceItem[]) => void;
 }
 
 export const AdminServicesEditor: React.FC<AdminServicesEditorProps> = ({
@@ -1221,16 +1236,25 @@ export const AdminServicesEditor: React.FC<AdminServicesEditorProps> = ({
   onSaveServices,
   onUploadFile,
   onDeleteMedia,
+  onDraftChange,
 }) => {
   const [list, setList] = useState<ServiceItem[]>(services);
   const [saving, setSaving] = useState(false);
   const [pickerIndex, setPickerIndex] = useState<number | null>(null);
   const [dragServiceIdx, setDragServiceIdx] = useState<number | null>(null);
   const [dragOverServiceIdx, setDragOverServiceIdx] = useState<number | null>(null);
+  const baselineRef = useRef<string>(JSON.stringify(services));
 
   useEffect(() => {
+    baselineRef.current = JSON.stringify(services);
     setList(services);
   }, [services]);
+
+  useEffect(() => {
+    if (!onDraftChange) return;
+    if (JSON.stringify(list) === baselineRef.current) return;
+    onDraftChange(list);
+  }, [list, onDraftChange]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -1357,7 +1381,12 @@ export const AdminServicesEditor: React.FC<AdminServicesEditorProps> = ({
               <div className="lg:col-span-3 space-y-2">
                 <div className="aspect-[4/3] bg-[#F0F0F1] border border-[#DCDCDE] overflow-hidden flex items-center justify-center">
                 {srv.image ? (
-                  <img src={srv.image} alt={srv.title} className="w-full h-full object-cover" />
+                  <ResolvedImg
+                    src={srv.image}
+                    preferThumb
+                    alt={srv.title}
+                    className="w-full h-full object-cover"
+                  />
                 ) : (
                   <span className="text-[11px] text-[#646970]">No image assigned</span>
                 )}
@@ -1561,6 +1590,10 @@ interface AdminProcessEditorProps {
   ) => Promise<void>;
   onUploadFile: (file: File) => Promise<MediaItem | null>;
   onDeleteMedia?: (item: MediaItem) => Promise<void>;
+  onDraftChange?: (
+    draftSteps: ProcessStep[],
+    draftComparisons: DrawingComparisonCase[]
+  ) => void;
 }
 
 type ProcessPickerTarget =
@@ -1574,6 +1607,7 @@ export const AdminProcessEditor: React.FC<AdminProcessEditorProps> = ({
   onSaveProcess,
   onUploadFile,
   onDeleteMedia,
+  onDraftChange,
 }) => {
   const [steps, setSteps] = useState<ProcessStep[]>(processSteps);
   const [comparisons, setComparisons] = useState<DrawingComparisonCase[]>(
@@ -1583,16 +1617,35 @@ export const AdminProcessEditor: React.FC<AdminProcessEditorProps> = ({
   const [pickerTarget, setPickerTarget] = useState<ProcessPickerTarget | null>(null);
   const [dragStepIdx, setDragStepIdx] = useState<number | null>(null);
   const [dragOverStepIdx, setDragOverStepIdx] = useState<number | null>(null);
+  const baselineStepsRef = useRef<string>(JSON.stringify(processSteps));
+  const baselineCasesRef = useRef<string>(
+    JSON.stringify(
+      comparisonCases && comparisonCases.length > 0 ? comparisonCases : DEFAULT_COMPARISON_CASES
+    )
+  );
 
   useEffect(() => {
+    baselineStepsRef.current = JSON.stringify(processSteps);
     setSteps(processSteps);
   }, [processSteps]);
 
   useEffect(() => {
     if (comparisonCases && comparisonCases.length > 0) {
+      baselineCasesRef.current = JSON.stringify(comparisonCases);
       setComparisons(comparisonCases);
     }
   }, [comparisonCases]);
+
+  useEffect(() => {
+    if (!onDraftChange) return;
+    if (
+      JSON.stringify(steps) === baselineStepsRef.current &&
+      JSON.stringify(comparisons) === baselineCasesRef.current
+    ) {
+      return;
+    }
+    onDraftChange(steps, comparisons);
+  }, [steps, comparisons, onDraftChange]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -1783,8 +1836,9 @@ export const AdminProcessEditor: React.FC<AdminProcessEditorProps> = ({
               <div className="lg:col-span-3 space-y-2.5">
               <div className="aspect-[4/3] bg-[#F0F0F1] border border-[#DCDCDE] overflow-hidden flex items-center justify-center">
                 {step.image ? (
-                  <img
+                  <ResolvedImg
                     src={step.image}
+                    preferThumb
                     alt={step.title}
                     className={`w-full h-full object-cover ${
                       step.imagePosition === 'top'
@@ -2073,8 +2127,9 @@ export const AdminProcessEditor: React.FC<AdminProcessEditorProps> = ({
                   <span className="block font-medium text-[#1D2327]">2D / 3D Plan Photo</span>
                   <div className="aspect-[16/10] bg-white border border-[#C3C4C7] overflow-hidden flex items-center justify-center">
                     {cmp.planImage ? (
-                      <img
+                      <ResolvedImg
                         src={cmp.planImage}
+                        preferThumb
                         alt={cmp.planLabel}
                         className="w-full h-full object-cover"
                       />
@@ -2112,8 +2167,9 @@ export const AdminProcessEditor: React.FC<AdminProcessEditorProps> = ({
                   <span className="block font-medium text-[#1D2327]">Realized / Executed Photo</span>
                   <div className="aspect-[16/10] bg-white border border-[#C3C4C7] overflow-hidden flex items-center justify-center">
                     {cmp.finishedImage ? (
-                      <img
+                      <ResolvedImg
                         src={cmp.finishedImage}
+                        preferThumb
                         alt={cmp.title}
                         className="w-full h-full object-cover"
                       />

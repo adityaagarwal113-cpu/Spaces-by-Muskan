@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { MediaItem, ProjectCategory, ProjectDetail } from '../../types';
 import { MediaPickerModal } from './MediaPickerModal';
+import { ResolvedImg } from '../OptimizedImage';
 
 interface ProjectEditorProps {
   project: ProjectDetail | null;
@@ -22,6 +23,7 @@ interface ProjectEditorProps {
   onCancel: () => void;
   onUploadFile: (file: File) => Promise<MediaItem | null>;
   onDeleteMedia?: (item: MediaItem) => Promise<void>;
+  onDraftChange?: (draft: ProjectDetail, isNew: boolean) => void;
 }
 
 const CATEGORY_OPTIONS: { value: ProjectCategory; label: string }[] = [
@@ -41,6 +43,7 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
   onCancel,
   onUploadFile,
   onDeleteMedia,
+  onDraftChange,
 }) => {
   const [form, setForm] = useState<ProjectDetail>(
     project || {
@@ -72,6 +75,29 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
   const [pickerTarget, setPickerTarget] = useState<'hero' | 'gallery' | null>(null);
   const [dragGalleryIdx, setDragGalleryIdx] = useState<number | null>(null);
   const [dragOverGalleryIdx, setDragOverGalleryIdx] = useState<number | null>(null);
+  const mountedRef = useRef(false);
+
+  useEffect(() => {
+    if (!onDraftChange) return;
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
+    onDraftChange(
+      {
+        ...form,
+        scope: scopeInput
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+        materials: materialsInput
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+      },
+      isNew
+    );
+  }, [form, scopeInput, materialsInput, isNew, onDraftChange]);
 
   const toggleSecondaryCategory = (slug: ProjectCategory) => {
     const current = form.secondaryCategories || [];
@@ -466,7 +492,7 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
             <div className="p-4 space-y-3">
               <div className="aspect-[4/3] bg-[#F0F0F1] border border-[#DCDCDE] overflow-hidden">
                 {form.heroImage ? (
-                  <img
+                  <ResolvedImg
                     src={form.heroImage}
                     alt={form.title || 'Project Preview'}
                     className="w-full h-full object-cover"
@@ -549,7 +575,12 @@ export const ProjectEditor: React.FC<ProjectEditorProps> = ({
                         : 'border-[#DCDCDE]'
                     }`}
                   >
-                    <img src={imgUrl} alt="" className="w-full h-full object-cover pointer-events-none" />
+                    <ResolvedImg
+                      src={imgUrl}
+                      preferThumb
+                      alt=""
+                      className="w-full h-full object-cover pointer-events-none"
+                    />
 
                     {/* Top-left Drag Handle + Slot Number */}
                     <div className="absolute top-1 left-1 px-1.5 py-0.5 bg-[#1D2327]/80 text-white text-[10px] font-mono flex items-center gap-0.5">

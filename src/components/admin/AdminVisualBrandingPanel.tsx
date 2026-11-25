@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Check, Palette, RotateCcw, Save, SlidersHorizontal, Type } from 'lucide-react';
 import { useCms } from '../../context/CmsContext';
 import {
@@ -15,15 +15,18 @@ import {
   StudioSiteConfig,
   TypographyPreset,
 } from '../../types';
+import { ResolvedImg } from '../OptimizedImage';
 
 interface AdminVisualBrandingPanelProps {
   siteConfig: StudioSiteConfig;
   onSaveSite: (nextConfig: StudioSiteConfig) => Promise<void>;
+  onDraftChange?: (patch: Partial<StudioSiteConfig>) => void;
 }
 
 export const AdminVisualBrandingPanel: React.FC<AdminVisualBrandingPanelProps> = ({
   siteConfig,
   onSaveSite,
+  onDraftChange,
 }) => {
   const { updateSiteConfigLocal } = useCms();
 
@@ -41,16 +44,41 @@ export const AdminVisualBrandingPanel: React.FC<AdminVisualBrandingPanelProps> =
   );
   const [saving, setSaving] = useState(false);
   const [dirtyCustom, setDirtyCustom] = useState(false);
+  const baselineRef = useRef<string>(
+    JSON.stringify({
+      accentTheme: siteConfig.accentTheme || 'terracotta',
+      customAccentColors: siteConfig.customAccentColors || ACCENT_COLOR_PRESETS[0].colors,
+      typographyPreset: siteConfig.typographyPreset || 'editorial_classic',
+      layoutSpacing: siteConfig.layoutSpacing || 'balanced',
+    })
+  );
 
   useEffect(() => {
-    setAccentTheme(siteConfig.accentTheme || 'terracotta');
-    if (siteConfig.customAccentColors) {
-      setCustomColors(siteConfig.customAccentColors);
-    }
-    setTypographyPreset(siteConfig.typographyPreset || 'editorial_classic');
-    setLayoutSpacing(siteConfig.layoutSpacing || 'balanced');
+    const nextBase = {
+      accentTheme: siteConfig.accentTheme || 'terracotta',
+      customAccentColors: siteConfig.customAccentColors || ACCENT_COLOR_PRESETS[0].colors,
+      typographyPreset: siteConfig.typographyPreset || 'editorial_classic',
+      layoutSpacing: siteConfig.layoutSpacing || 'balanced',
+    };
+    baselineRef.current = JSON.stringify(nextBase);
+    setAccentTheme(nextBase.accentTheme);
+    setCustomColors(nextBase.customAccentColors);
+    setTypographyPreset(nextBase.typographyPreset);
+    setLayoutSpacing(nextBase.layoutSpacing);
     setDirtyCustom(false);
   }, [siteConfig]);
+
+  useEffect(() => {
+    if (!onDraftChange) return;
+    const payload = {
+      accentTheme,
+      customAccentColors: customColors,
+      typographyPreset,
+      layoutSpacing,
+    };
+    if (JSON.stringify(payload) === baselineRef.current) return;
+    onDraftChange(payload);
+  }, [accentTheme, customColors, typographyPreset, layoutSpacing, onDraftChange]);
 
   const activeColors = resolveAccentColors(accentTheme, customColors);
   const activeTypography = resolveTypographyPreset(typographyPreset);
@@ -425,8 +453,9 @@ export const AdminVisualBrandingPanel: React.FC<AdminVisualBrandingPanelProps> =
                 <div className="bg-white border border-[#DFD8CE] p-2">
                   <div className="aspect-[16/10] bg-[#E8E2D9] overflow-hidden mb-1.5">
                     {siteConfig.heroPrimaryImage && (
-                      <img
+                      <ResolvedImg
                         src={siteConfig.heroPrimaryImage}
+                        preferThumb
                         alt="Sample"
                         className="w-full h-full object-cover"
                       />
@@ -449,8 +478,9 @@ export const AdminVisualBrandingPanel: React.FC<AdminVisualBrandingPanelProps> =
                 <div className="bg-white border border-[#DFD8CE] p-2">
                   <div className="aspect-[16/10] bg-[#E8E2D9] overflow-hidden mb-1.5">
                     {siteConfig.heroSecondaryImage && (
-                      <img
+                      <ResolvedImg
                         src={siteConfig.heroSecondaryImage}
+                        preferThumb
                         alt="Sample"
                         className="w-full h-full object-cover"
                       />

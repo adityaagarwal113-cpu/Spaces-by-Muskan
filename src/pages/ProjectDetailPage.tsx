@@ -5,7 +5,7 @@ import { useCms } from '../context/CmsContext';
 import { PageTransition } from '../components/PageTransition';
 import { SEO } from '../components/SEO';
 import { AnimatePresence, motion } from 'motion/react';
-import { OptimizedImage, getHighResImageSrc } from '../components/OptimizedImage';
+import { OptimizedImage, ResolvedImg, getHighResImageSrc } from '../components/OptimizedImage';
 
 export const ProjectDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -362,7 +362,7 @@ export const ProjectDetailPage: React.FC = () => {
               className="relative max-w-5xl max-h-[90vh] overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
-              <img
+              <ResolvedImg
                 src={getHighResImageSrc(activeLightboxImg)}
                 alt={project.title}
                 referrerPolicy="no-referrer"

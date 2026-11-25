@@ -1,5 +1,6 @@
 import React from 'react';
 import { CRAFT_DETAILS } from '../data/studioData';
+import { ResolvedImg } from './OptimizedImage';
 
 export const CraftsmanshipDetails: React.FC = () => {
   return (
@@ -30,7 +31,7 @@ export const CraftsmanshipDetails: React.FC = () => {
             >
               {/* Detail Image Thumbnail */}
               <div className="h-52 w-full overflow-hidden rounded-xs bg-[#EBE7E0] mb-6 hover-light-sweep">
-                <img
+                <ResolvedImg
                   src={item.image}
                   alt={item.title}
                   className="w-full h-full object-cover object-center group-hover:scale-104 transition-transform duration-700 ease-out"

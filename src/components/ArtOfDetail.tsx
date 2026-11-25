@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { motion, useScroll, useTransform } from 'motion/react';
 import { CRAFT_DETAILS, BRAND_ASSETS } from '../data/studioData';
+import { ResolvedImg } from './OptimizedImage';
 
 interface DetailMoment {
   number: string;
@@ -114,7 +115,7 @@ export const ArtOfDetail: React.FC = () => {
                 className={`${item.widthClass} shrink-0 flex flex-col justify-between p-5 bg-[#1F1F21] border border-white/10 rounded-xs hover:border-[#B9322C] transition-colors`}
               >
                 <div className={`${item.heightClass} w-full overflow-hidden rounded-xs bg-black relative mb-4`}>
-                  <img
+                  <ResolvedImg
                     src={item.image}
                     alt={item.title}
                     className="w-full h-full object-cover object-center filter contrast-[1.04]"
@@ -161,7 +162,7 @@ export const ArtOfDetail: React.FC = () => {
               className="w-[82vw] sm:w-[360px] shrink-0 snap-center p-4 bg-[#1F1F21] border border-white/10 rounded-xs flex flex-col justify-between"
             >
               <div className="h-64 sm:h-72 w-full overflow-hidden rounded-xs bg-black relative mb-4">
-                <img
+                <ResolvedImg
                   src={item.image}
                   alt={item.title}
                   className="w-full h-full object-cover object-center filter contrast-[1.03]"

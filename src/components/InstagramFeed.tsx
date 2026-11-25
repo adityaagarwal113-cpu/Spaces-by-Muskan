@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowUpRight, Instagram, Youtube } from 'lucide-react';
 import { STUDIO_CONFIG, PROJECTS } from '../data/studioData';
+import { ResolvedImg } from './OptimizedImage';
 
 export const InstagramFeed: React.FC = () => {
   return (
@@ -53,7 +54,7 @@ export const InstagramFeed: React.FC = () => {
               className="group w-[72vw] sm:w-[320px] lg:w-[360px] shrink-0 snap-start bg-[#FAF9F7] border border-[#DDD9D0] rounded-xs overflow-hidden hover:border-[#B9322C] transition-all duration-300 flex flex-col justify-between"
             >
               <div className="h-64 sm:h-72 w-full overflow-hidden bg-[#161617] relative">
-                <img
+                <ResolvedImg
                   src={item.heroImage}
                   alt={item.title}
                   className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 ease-out filter contrast-[1.03]"

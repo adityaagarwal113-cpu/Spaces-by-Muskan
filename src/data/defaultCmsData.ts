@@ -107,6 +107,7 @@ export const DEFAULT_SITE_CONFIG: StudioSiteConfig = {
   googleMapsLink: '#',
   responseCommitmentText: 'Every project brief is personally reviewed by Muskan Agarwal.',
 
+  requireAdminLogin: false,
   accentTheme: 'terracotta',
   customAccentColors: {
     brand: '#8E4A36',

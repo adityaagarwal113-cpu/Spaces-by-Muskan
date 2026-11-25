@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { X, ArrowUpRight, Check, Compass, Ruler, Layers } from 'lucide-react';
 import { ProjectDetail } from '../types';
+import { ResolvedImg } from './OptimizedImage';
 
 interface ProjectModalProps {
   project: ProjectDetail | null;
@@ -48,7 +49,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, on
 
         {/* Hero Image */}
         <div className="relative w-full h-[45vh] sm:h-[55vh] bg-[#181716]">
-          <img
+          <ResolvedImg
             src={project.heroImage}
             alt={project.title}
             className="w-full h-full object-cover object-center"
@@ -165,7 +166,7 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ project, onClose, on
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {project.galleryImages.slice(1).map((imgUrl, idx) => (
                   <div key={idx} className="h-64 sm:h-72 bg-[#EBE7E0] overflow-hidden rounded-xs">
-                    <img
+                    <ResolvedImg
                       src={imgUrl}
                       alt={`${project.title} perspective ${idx + 2}`}
                       className="w-full h-full object-cover hover:scale-103 transition-transform duration-500"

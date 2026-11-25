@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Check, Image as ImageIcon, Search, Trash2, Upload, X } from 'lucide-react';
 import { MediaItem } from '../../types';
+import { ResolvedImg } from '../OptimizedImage';
 
 interface MediaPickerModalProps {
   isOpen: boolean;
@@ -188,8 +189,9 @@ export const MediaPickerModal: React.FC<MediaPickerModalProps> = ({
                       className="text-left cursor-pointer w-full"
                     >
                       <div className="aspect-square bg-[#E5E5E5] overflow-hidden relative">
-                        <img
+                        <ResolvedImg
                           src={item.webpUrl || item.url}
+                          preferThumb
                           alt={item.filename}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         />

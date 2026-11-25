@@ -4,7 +4,7 @@ import { ArrowUpRight, Compass, Heart, Ruler, CheckCircle, Youtube } from 'lucid
 import { useCms } from '../context/CmsContext';
 import { PageTransition } from '../components/PageTransition';
 import { SEO } from '../components/SEO';
-import { OptimizedImage } from '../components/OptimizedImage';
+import { OptimizedImage, ResolvedImg } from '../components/OptimizedImage';
 
 export const AboutPage: React.FC = () => {
   const { siteConfig } = useCms();
@@ -46,8 +46,9 @@ export const AboutPage: React.FC = () => {
                 <div className="absolute inset-0 bg-gradient-to-t from-[#181615]/85 via-[#181615]/20 to-transparent" />
                 <div className="absolute bottom-6 left-6 right-6 text-white">
                   {siteConfig.logoEmblem && (
-                    <img
+                    <ResolvedImg
                       src={siteConfig.logoEmblem}
+                      preferThumb
                       alt={`${siteConfig.name} emblem`}
                       referrerPolicy="no-referrer"
                       className="w-11 h-11 rounded-full object-cover border border-white/25 mb-3 shadow-md"

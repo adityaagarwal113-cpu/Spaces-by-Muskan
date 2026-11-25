@@ -1,0 +1,265 @@
+{
+  "entities": {
+    "CmsPublicState": {
+      "title": "CmsPublicState",
+      "description": "Single-document public storefront configuration and portfolio catalog for fast 1-read page loads.",
+      "type": "object",
+      "properties": {
+        "siteConfig": {
+          "type": "object",
+          "description": "Studio branding, headlines, hero images (compact paths or fbimg refs), navigation labels, visual theme, ticker, and popup config."
+        },
+        "projects": {
+          "type": "array",
+          "description": "Portfolio showcase items (bounded to max 100 projects)."
+        },
+        "services": {
+          "type": "array",
+          "description": "Studio service and Vastu offerings (bounded to max 30 services)."
+        },
+        "processSteps": {
+          "type": "array",
+          "description": "Design methodology stages (bounded to max 20 steps)."
+        },
+        "craftDetails": {
+          "type": "array",
+          "description": "Material craft detail cards (bounded to max 30 items)."
+        },
+        "comparisonCases": {
+          "type": "array",
+          "description": "2D CAD to 3D realized space comparison cases (bounded to max 20 items)."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of the latest CMS update."
+        }
+      },
+      "required": [
+        "siteConfig",
+        "projects",
+        "services",
+        "processSteps",
+        "craftDetails",
+        "comparisonCases",
+        "updatedAt"
+      ]
+    },
+    "MediaIndex": {
+      "title": "MediaIndex",
+      "description": "Compact metadata catalog of uploaded studio media assets for fast 1-read Admin Media Library listing.",
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "description": "Metadata entries for uploaded media docs (max 500 entries)."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of latest index update."
+        }
+      },
+      "required": ["items", "updatedAt"]
+    },
+    "StudioMediaAsset": {
+      "title": "StudioMediaAsset",
+      "description": "Compressed WebP image asset stored in Firestore so images sync across devices and can be deleted cleanly to reclaim free-tier quota.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "filename": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "mimeType": {
+          "type": "string",
+          "enum": ["image/webp", "image/jpeg", "image/png"]
+        },
+        "dataUrl": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 750000
+        },
+        "thumbUrl": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 180000
+        },
+        "sizeBytes": {
+          "type": "number"
+        },
+        "originalSizeBytes": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        },
+        "uploaderUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "filename",
+        "mimeType",
+        "dataUrl",
+        "thumbUrl",
+        "sizeBytes",
+        "originalSizeBytes",
+        "width",
+        "height",
+        "uploaderUid",
+        "createdAt"
+      ]
+    },
+    "ClientEnquiry": {
+      "title": "ClientEnquiry",
+      "description": "Client project consultation brief submitted from the storefront enquiry modal or contact page.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "orderNumber": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 32,
+          "pattern": "^SM-[A-Z0-9]+$"
+        },
+        "studioTarget": {
+          "type": "string",
+          "enum": ["spaces_by_muskan"]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "phone": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 40
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "projectType": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "location": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "approxArea": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "budget": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "timeline": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "brief": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "status": {
+          "type": "string",
+          "enum": ["new", "reviewed", "consultation", "completed", "archived"]
+        },
+        "internalNote": {
+          "type": "string",
+          "maxLength": 1500
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "orderNumber",
+        "studioTarget",
+        "name",
+        "phone",
+        "email",
+        "projectType",
+        "location",
+        "approxArea",
+        "budget",
+        "timeline",
+        "brief",
+        "status",
+        "internalNote",
+        "createdAt"
+      ]
+    },
+    "AdminRole": {
+      "title": "AdminRole",
+      "description": "Authorized studio administrator UID record.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["email", "role", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/cms/{docId}": {
+      "schema": { "$ref": "#/entities/CmsPublicState" },
+      "description": "Public storefront CMS document at /cms/public (1-read page load)."
+    },
+    "/media_index/{docId}": {
+      "schema": { "$ref": "#/entities/MediaIndex" },
+      "description": "Admin-only media manifest document at /media_index/all."
+    },
+    "/media/{mediaId}": {
+      "schema": { "$ref": "#/entities/StudioMediaAsset" },
+      "description": "Compressed WebP image assets referenced via fbimg:<mediaId>; individually readable and admin-writable/deletable."
+    },
+    "/enquiries/{enquiryId}": {
+      "schema": { "$ref": "#/entities/ClientEnquiry" },
+      "description": "Client consultation briefs; public create-only, strictly admin-only read/update/delete."
+    },
+    "/admins/{uid}": {
+      "schema": { "$ref": "#/entities/AdminRole" },
+      "description": "Studio admin allowlist keyed by Firebase Auth UID."
+    }
+  }
+}

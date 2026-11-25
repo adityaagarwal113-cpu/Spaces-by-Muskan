@@ -4,6 +4,7 @@ import { ArrowUpRight, Compass } from 'lucide-react';
 import { ProjectDetail, ProjectCategory } from '../types';
 import { PROJECTS } from '../data/studioData';
 import { ProjectModal } from './ProjectModal';
+import { ResolvedImg } from './OptimizedImage';
 
 interface PortfolioProps {
   onOpenContact: () => void;
@@ -83,7 +84,7 @@ export const Portfolio: React.FC<PortfolioProps> = ({ onOpenContact }) => {
                 className={`group relative overflow-hidden bg-[#181716] cursor-pointer rounded-xs block ${colSpan}`}
               >
                 {/* Project Photograph */}
-                <img
+                <ResolvedImg
                   src={project.heroImage}
                   alt={`${project.title} - ${project.category}`}
                   className="w-full h-full object-cover object-center transform transition-transform duration-700 ease-out group-hover:scale-103"

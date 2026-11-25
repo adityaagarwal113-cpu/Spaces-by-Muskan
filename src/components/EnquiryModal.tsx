@@ -3,6 +3,8 @@ import { X, CheckCircle2, MessageCircle, Send } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useEnquiry } from '../context/EnquiryContext';
 import { useCms } from '../context/CmsContext';
+import { submitEnquiryToFirestore } from '../utils/firebaseCmsService';
+import { addBrowserEnquiry } from '../utils/localCmsFallback';
 
 export const EnquiryModal: React.FC = () => {
   const { isOpen, initialService, closeEnquiry } = useEnquiry();
@@ -73,17 +75,12 @@ export const EnquiryModal: React.FC = () => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/enquiries', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSubmittedOrderNum(data.enquiry?.orderNumber || '');
-      }
+      const saved = await submitEnquiryToFirestore(formData);
+      setSubmittedOrderNum(saved.orderNumber);
       setIsSubmitted(true);
     } catch {
+      const fallback = addBrowserEnquiry(formData);
+      setSubmittedOrderNum(fallback.orderNumber);
       setIsSubmitted(true);
     } finally {
       setIsSubmitting(false);

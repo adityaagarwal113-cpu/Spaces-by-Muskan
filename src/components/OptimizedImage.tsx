@@ -1,4 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import {
+  isFirebaseMediaRef,
+  resolveFirebaseMediaUrl,
+} from '../utils/firebaseMediaCache';
 
 interface OptimizedImageProps {
   src?: string;
@@ -13,7 +17,7 @@ interface OptimizedImageProps {
 const RESPONSIVE_WIDTHS = [480, 960, 1440, 2160] as const;
 
 export function buildResponsiveWebpSrcSet(src?: string): string | null {
-  if (!src) return null;
+  if (!src || isFirebaseMediaRef(src)) return null;
 
   // Match /assets/muskan/<name>.<ext> or /uploads/<name>.<ext>
   const match = src.match(/^(\/assets\/muskan|\/uploads)\/([^/?#]+)\.(jpe?g|png|webp|avif)$/i);
@@ -29,10 +33,85 @@ export function buildResponsiveWebpSrcSet(src?: string): string | null {
 
 export function getHighResImageSrc(src?: string): string {
   if (!src) return '';
+  if (isFirebaseMediaRef(src)) return src;
   const match = src.match(/^(\/assets\/muskan|\/uploads)\/([^/?#]+)\.(jpe?g|png|webp|avif)$/i);
   if (!match) return src;
   return `${match[1]}/opt/${match[2]}-2160w.webp`;
 }
+
+export function useResolvedImageSrc(src?: string, preferThumb = false): {
+  resolvedSrc: string;
+  resolving: boolean;
+} {
+  const needsAsyncResolve = isFirebaseMediaRef(src);
+  const [resolvedSrc, setResolvedSrc] = useState<string>(() =>
+    needsAsyncResolve ? '' : src || ''
+  );
+  const [resolving, setResolving] = useState<boolean>(needsAsyncResolve);
+
+  useEffect(() => {
+    if (!src) {
+      setResolvedSrc('');
+      setResolving(false);
+      return;
+    }
+    if (!isFirebaseMediaRef(src)) {
+      setResolvedSrc(src);
+      setResolving(false);
+      return;
+    }
+
+    let cancelled = false;
+    setResolving(true);
+    void resolveFirebaseMediaUrl(src, preferThumb)
+      .then((url) => {
+        if (!cancelled) {
+          setResolvedSrc(url);
+          setResolving(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setResolvedSrc('');
+          setResolving(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [src, preferThumb]);
+
+  return { resolvedSrc, resolving };
+}
+
+export interface ResolvedImgProps
+  extends Omit<React.ImgHTMLAttributes<HTMLImageElement>, 'src'> {
+  src?: string;
+  preferThumb?: boolean;
+}
+
+export const ResolvedImg: React.FC<ResolvedImgProps> = ({
+  src,
+  preferThumb = false,
+  alt = '',
+  className = '',
+  ...rest
+}) => {
+  const { resolvedSrc, resolving } = useResolvedImageSrc(src, preferThumb);
+
+  if (resolving || !resolvedSrc) {
+    return (
+      <div
+        className={`bg-[#E9E4DC] animate-pulse ${className}`}
+        aria-label={alt}
+        role="img"
+      />
+    );
+  }
+
+  return <img src={resolvedSrc} alt={alt} className={className} {...rest} />;
+};
 
 export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   src,
@@ -43,13 +122,25 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   fallbackLabel,
   style,
 }) => {
+  const { resolvedSrc, resolving } = useResolvedImageSrc(src, false);
   const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
     setHasError(false);
-  }, [src]);
+  }, [src, resolvedSrc]);
 
-  if (!src || hasError) {
+  if (resolving) {
+    return (
+      <div
+        className={`bg-gradient-to-br from-[#F0ECE4] to-[#E5DFD3] animate-pulse ${className}`}
+        style={style}
+        role="img"
+        aria-label={alt}
+      />
+    );
+  }
+
+  if (!resolvedSrc || hasError) {
     return (
       <div
         className={`flex flex-col items-center justify-center bg-gradient-to-br from-[#EDE8DF] via-[#E5DFD3] to-[#D8D0C2] text-[#6B655E] p-6 text-center select-none ${className}`}
@@ -68,7 +159,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
     );
   }
 
-  const webpSrcSet = buildResponsiveWebpSrcSet(src);
+  const webpSrcSet = buildResponsiveWebpSrcSet(resolvedSrc);
 
   return (
     <picture className="block w-full h-full">
@@ -76,7 +167,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
         <source type="image/webp" srcSet={webpSrcSet} sizes={sizes} />
       )}
       <img
-        src={src}
+        src={resolvedSrc}
         alt={alt}
         className={className}
         style={style}

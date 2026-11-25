@@ -1,12 +1,16 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { onAuthStateChanged, signInWithPopup, signOut, User } from 'firebase/auth';
 import {
   ArrowDown,
   ArrowUp,
   Briefcase,
   Check,
+  Cloud,
   Copy,
+  Download,
   ExternalLink,
+  Eye,
   FileEdit,
   FolderKanban,
   GripVertical,
@@ -16,19 +20,23 @@ import {
   Layers,
   LayoutDashboard,
   Lock,
+  LogOut,
   Megaphone,
   Menu,
   Plus,
   RefreshCw,
   Search,
   Settings,
+  ShieldCheck,
   ShoppingBag,
   Star,
   Trash2,
+  Unlock,
   Upload,
   X,
 } from 'lucide-react';
 import { useCms } from '../context/CmsContext';
+import { ResolvedImg } from '../components/OptimizedImage';
 import { AdminEnquiriesPanel } from '../components/admin/AdminEnquiriesPanel';
 import { AdminPromotionsEditor } from '../components/admin/AdminPromotionsEditor';
 import { AdminVisualBrandingPanel } from '../components/admin/AdminVisualBrandingPanel';
@@ -38,7 +46,34 @@ import {
   AdminSiteEditor,
 } from '../components/admin/AdminSiteEditor';
 import { ProjectEditor } from '../components/admin/ProjectEditor';
+import { DEFAULT_CMS_DATA } from '../data/defaultCmsData';
+import { auth, FIREBASE_PROJECT_INFO, googleProvider } from '../firebase';
 import {
+  checkIsUserAdmin,
+  deleteEnquiryFromFirestore,
+  deleteMediaFromFirestore,
+  fetchPublicCmsFromFirestore,
+  listEnquiriesFromFirestore,
+  loadAdminMediaFromFirestore,
+  savePublicCmsToFirestore,
+  updateEnquiryInFirestore,
+  uploadCompressedMediaToFirestore,
+} from '../utils/firebaseCmsService';
+import { compressImageForFirestore } from '../utils/imageOptimizer';
+import {
+  buildBrowserProject,
+  clearDraftPreviewStore,
+  deleteBrowserMedia,
+  getBundledArchiveMedia,
+  hydrateCmsStore,
+  listBrowserMedia,
+  mergeSiteConfigSafe,
+  readDraftPreviewStore,
+  saveBrowserUpload,
+  saveDraftPreviewStore,
+} from '../utils/localCmsFallback';
+import {
+  AnnouncementTickerConfig,
   CmsStoreData,
   DrawingComparisonCase,
   EnquiryOrder,
@@ -46,6 +81,7 @@ import {
   MediaItem,
   ProcessStep,
   ProjectDetail,
+  PromoPopupConfig,
   ServiceItem,
   StorageStats,
   StudioSiteConfig,
@@ -62,16 +98,27 @@ type AdminTab =
   | 'promotions'
   | 'settings';
 
-const TOKEN_STORAGE_KEY = 'sbm_wp_admin_token';
+const DRAFT_DIRTY_KEY = 'sbm_cms_draft_dirty_v1';
 
-function readFileAsBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => reject(new Error('Could not read selected file.'));
-    reader.readAsDataURL(file);
-  });
-}
+const DEMO_SHOWCASE_ENQUIRIES: EnquiryOrder[] = [
+  {
+    id: 'demo-enq-1',
+    orderNumber: 'SM-DEMO1',
+    name: 'Sample Client Brief (Preview)',
+    phone: '+91 98XXX XXXXX',
+    email: 'sample-client@example.com',
+    projectType: '3BHK Residence + Vastu Alignment',
+    location: 'Sample Showcase Entry',
+    approxArea: '1,850 sq.ft.',
+    budget: 'Turnkey Bespoke',
+    timeline: 'Within 2 months',
+    brief:
+      'Sample consultation brief shown in Open Showcase Mode. Sign in with Google to view and manage real client enquiries submitted from your live website.',
+    status: 'new',
+    internalNote: 'Sample showcase record — real customer enquiries remain protected.',
+    createdAt: new Date().toISOString(),
+  },
+];
 
 export const AdminPage: React.FC = () => {
   const { refreshCms } = useCms();
@@ -79,26 +126,29 @@ export const AdminPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
-  // Auth state (optional studio passcode)
+  // Firebase Auth & Access Lock state
   const [authChecked, setAuthChecked] = useState(false);
-  const [passcodeEnabled, setPasscodeEnabled] = useState(false);
+  const [authUser, setAuthUser] = useState<User | null>(null);
   const [authenticated, setAuthenticated] = useState(false);
-  const [adminToken, setAdminToken] = useState<string>(
-    () => localStorage.getItem(TOKEN_STORAGE_KEY) || ''
-  );
-  const [loginPasscode, setLoginPasscode] = useState('');
+  const [loginRequired, setLoginRequired] = useState(false);
+  const [unauthorizedEmail, setUnauthorizedEmail] = useState<string | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
   const [loginError, setLoginError] = useState('');
 
-  // Store state
+  // Store & Draft Preview state
   const [loading, setLoading] = useState(true);
   const [store, setStore] = useState<CmsStoreData | null>(null);
+  const [draftStore, setDraftStore] = useState<CmsStoreData | null>(null);
+  const [hasUnpublishedDraft, setHasUnpublishedDraft] = useState(false);
+  const [publishingDraft, setPublishingDraft] = useState(false);
   const [media, setMedia] = useState<MediaItem[]>([]);
   const [storageStats, setStorageStats] = useState<StorageStats | null>(null);
 
   // Feedback Notice
-  const [notice, setNotice] = useState<{ type: 'success' | 'error'; text: string } | null>(
-    null
-  );
+  const [notice, setNotice] = useState<{
+    type: 'success' | 'error' | 'info';
+    text: string;
+  } | null>(null);
 
   // Projects list controls
   const [editingProject, setEditingProject] = useState<ProjectDetail | null>(null);
@@ -119,182 +169,511 @@ export const AdminPage: React.FC = () => {
   const mediaInputRef = useRef<HTMLInputElement>(null);
 
   // Settings controls
-  const [newPasscode, setNewPasscode] = useState('');
   const [confirmResetModal, setConfirmResetModal] = useState(false);
 
-  const showNotice = useCallback((type: 'success' | 'error', text: string) => {
+  const showNotice = useCallback((type: 'success' | 'error' | 'info', text: string) => {
     setNotice({ type, text });
   }, []);
 
-  const authHeaders = useCallback(
-    (extra?: Record<string, string>) => {
-      const h: Record<string, string> = { ...(extra || {}) };
-      if (adminToken) h['x-admin-token'] = adminToken;
-      return h;
-    },
-    [adminToken]
-  );
-
   const loadAdminData = useCallback(
-    async (tokenOverride?: string) => {
+    async (isAdminAuthenticated: boolean) => {
       setLoading(true);
       try {
-        const headers: Record<string, string> = {};
-        const tk = tokenOverride ?? adminToken;
-        if (tk) headers['x-admin-token'] = tk;
+        const cmsRes = await fetchPublicCmsFromFirestore();
+        const isLocked = Boolean(cmsRes.store.siteConfig.requireAdminLogin);
+        setLoginRequired(isLocked);
 
-        const statusRes = await fetch('/api/admin/auth/status', { headers });
-        const statusData = await statusRes.json();
-        setPasscodeEnabled(Boolean(statusData.passcodeEnabled));
-        setAuthenticated(Boolean(statusData.authenticated));
-        setAuthChecked(true);
+        const isDirty = localStorage.getItem(DRAFT_DIRTY_KEY) === '1';
+        const savedDraft = isDirty ? readDraftPreviewStore() : null;
 
-        if (!statusData.authenticated) {
-          setLoading(false);
-          return;
-        }
-
-        const cmsRes = await fetch('/api/admin/cms', { headers, cache: 'no-store' });
-        if (!cmsRes.ok) {
-          if (cmsRes.status === 401) {
-            setAuthenticated(false);
+        if (!isAdminAuthenticated) {
+          if (isLocked) {
+            setStore(null);
+            setDraftStore(null);
+            setLoading(false);
+            return;
           }
-          setLoading(false);
+
+          const baseStore = savedDraft || cmsRes.store;
+          const showcaseStore: CmsStoreData = {
+            ...baseStore,
+            enquiries: DEMO_SHOWCASE_ENQUIRIES,
+          };
+          const localMedia = listBrowserMedia();
+          const archiveCount = getBundledArchiveMedia().length;
+          const uploadsCount = localMedia.filter((m) => m.source === 'uploads').length;
+          const usedBytes = localMedia
+            .filter((m) => m.source === 'uploads')
+            .reduce((sum, item) => sum + (item.sizeBytes || 0), 0);
+
+          setStore(showcaseStore);
+          setDraftStore(showcaseStore);
+          setHasUnpublishedDraft(Boolean(savedDraft));
+          saveDraftPreviewStore(showcaseStore);
+          setMedia(localMedia);
+          setStorageStats({
+            totalSourceImages: localMedia.length,
+            totalWebpVariants: uploadsCount * 2 + archiveCount * 4,
+            uploadsCount,
+            archiveCount,
+            usedBytes,
+            originalBytesSaved: 0,
+            freeBytes: Math.max(0, 1024 * 1024 * 1024 - usedBytes),
+            totalDiskBytes: 1024 * 1024 * 1024,
+            maxUploadMb: 40,
+            storageMode: 'firebase-firestore',
+          });
           return;
         }
-        const data = await cmsRes.json();
-        setStore({
-          siteConfig: data.siteConfig,
-          projects: data.projects || [],
-          services: data.services || [],
-          processSteps: data.processSteps || [],
-          craftDetails: data.craftDetails || [],
-          comparisonCases: data.comparisonCases || [],
-          enquiries: data.enquiries || [],
-          updatedAt: data.updatedAt,
-        });
-        setMedia(data.media || []);
-        if (data.storageStats) {
-          setStorageStats(data.storageStats);
+
+        const [mediaRes, enquiriesRes] = await Promise.all([
+          loadAdminMediaFromFirestore(),
+          listEnquiriesFromFirestore(),
+        ]);
+
+        let activeStore = cmsRes.store;
+        if (!cmsRes.existsInFirestore) {
+          activeStore = await savePublicCmsToFirestore(cmsRes.store);
         }
-      } catch {
-        showNotice('error', 'Unable to connect to the backend API.');
+
+        const liveWithEnquiries: CmsStoreData = {
+          ...activeStore,
+          enquiries: enquiriesRes,
+        };
+        setStore(liveWithEnquiries);
+
+        if (savedDraft) {
+          const mergedDraft: CmsStoreData = {
+            ...savedDraft,
+            enquiries: enquiriesRes,
+          };
+          setDraftStore(mergedDraft);
+          setHasUnpublishedDraft(true);
+          saveDraftPreviewStore(mergedDraft);
+        } else {
+          setDraftStore(liveWithEnquiries);
+          setHasUnpublishedDraft(false);
+          saveDraftPreviewStore(liveWithEnquiries);
+        }
+
+        setMedia(mediaRes.media);
+        setStorageStats(mediaRes.storageStats);
+      } catch (err) {
+        showNotice(
+          'error',
+          err instanceof Error
+            ? err.message
+            : 'Could not sync studio data from Firebase Firestore.'
+        );
       } finally {
         setLoading(false);
       }
     },
-    [adminToken, showNotice]
+    [showNotice]
   );
 
   useEffect(() => {
-    void loadAdminData();
-  }, [loadAdminData]);
-
-  const handleLoginSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoginError('');
-    try {
-      const res = await fetch('/api/admin/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ passcode: loginPasscode }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setLoginError(data.error || 'Incorrect passcode.');
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      setAuthUser(user);
+      if (!user) {
+        setAuthenticated(false);
+        setUnauthorizedEmail(null);
+        setAuthChecked(true);
+        await loadAdminData(false);
         return;
       }
-      if (data.token) {
-        localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
-        setAdminToken(data.token);
-        setLoginPasscode('');
-        await loadAdminData(data.token);
+
+      const isAdmin = await checkIsUserAdmin(user);
+      if (!isAdmin) {
+        setAuthenticated(false);
+        setUnauthorizedEmail(user.email || 'Unknown account');
+        setAuthChecked(true);
+        await loadAdminData(false);
+        return;
       }
+
+      setUnauthorizedEmail(null);
+      setAuthenticated(true);
+      setAuthChecked(true);
+      await loadAdminData(true);
+    });
+
+    return () => unsubscribe();
+  }, [loadAdminData]);
+
+  const handleGoogleSignIn = async () => {
+    setLoginError('');
+    setSigningIn(true);
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Google Sign-In failed.';
+      if (!msg.includes('popup-closed-by-user')) {
+        setLoginError(msg);
+      }
+    } finally {
+      setSigningIn(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      setAuthenticated(false);
+      await loadAdminData(false);
+    } catch (err) {
+      showNotice('error', err instanceof Error ? err.message : 'Failed to sign out.');
+    }
+  };
+
+  const updateDraftSnapshot = useCallback(
+    (updater: (prev: CmsStoreData) => CmsStoreData) => {
+      setDraftStore((prev) => {
+        const base = prev || store;
+        if (!base) return prev;
+        const next = updater(base);
+        saveDraftPreviewStore(next);
+        try {
+          localStorage.setItem(DRAFT_DIRTY_KEY, '1');
+        } catch {
+          // Ignore
+        }
+        setHasUnpublishedDraft(true);
+        return next;
+      });
+    },
+    [store]
+  );
+
+  const syncDraftPreviewNow = useCallback(() => {
+    const target = draftStore || store;
+    if (target) {
+      saveDraftPreviewStore(target);
+    }
+  }, [draftStore, store]);
+
+  const handleSiteDraftChange = useCallback(
+    (draftSite: StudioSiteConfig) => {
+      updateDraftSnapshot((prev) => ({
+        ...prev,
+        siteConfig: mergeSiteConfigSafe({ ...prev.siteConfig, ...draftSite }),
+      }));
+    },
+    [updateDraftSnapshot]
+  );
+
+  const handleServicesDraftChange = useCallback(
+    (draftServices: ServiceItem[]) => {
+      updateDraftSnapshot((prev) => ({
+        ...prev,
+        services: draftServices,
+      }));
+    },
+    [updateDraftSnapshot]
+  );
+
+  const handleProcessDraftChange = useCallback(
+    (draftSteps: ProcessStep[], draftComparisons: DrawingComparisonCase[]) => {
+      updateDraftSnapshot((prev) => ({
+        ...prev,
+        processSteps: draftSteps,
+        comparisonCases: draftComparisons,
+      }));
+    },
+    [updateDraftSnapshot]
+  );
+
+  const handlePromotionsDraftChange = useCallback(
+    (patch: {
+      promoPopup: PromoPopupConfig;
+      announcementTicker: AnnouncementTickerConfig;
+    }) => {
+      updateDraftSnapshot((prev) => ({
+        ...prev,
+        siteConfig: mergeSiteConfigSafe({
+          ...prev.siteConfig,
+          promoPopup: patch.promoPopup,
+          announcementTicker: patch.announcementTicker,
+        }),
+      }));
+    },
+    [updateDraftSnapshot]
+  );
+
+  const handleBrandingDraftChange = useCallback(
+    (patch: Partial<StudioSiteConfig>) => {
+      updateDraftSnapshot((prev) => ({
+        ...prev,
+        siteConfig: mergeSiteConfigSafe({
+          ...prev.siteConfig,
+          ...patch,
+        }),
+      }));
+    },
+    [updateDraftSnapshot]
+  );
+
+  const handleProjectDraftChange = useCallback(
+    (draftProject: ProjectDetail, isNew: boolean) => {
+      updateDraftSnapshot((prev) => {
+        if (isNew) {
+          const previewProj = buildBrowserProject(draftProject, prev.projects.length);
+          if (!previewProj.title.trim()) {
+            previewProj.title = 'Untitled New Project (Preview)';
+          }
+          const filtered = prev.projects.filter((p) => p.id !== '__preview_new_project__');
+          return {
+            ...prev,
+            projects: [{ ...previewProj, id: '__preview_new_project__' }, ...filtered],
+          };
+        }
+        return {
+          ...prev,
+          projects: prev.projects.map((p) =>
+            p.id === draftProject.id ? { ...p, ...draftProject } : p
+          ),
+        };
+      });
+    },
+    [updateDraftSnapshot]
+  );
+
+  const persistStoreChanges = useCallback(
+    async (nextStore: CmsStoreData, successText: string) => {
+      const cleanedProjects = nextStore.projects.filter(
+        (p) => p.id !== '__preview_new_project__'
+      );
+      const sanitizedStore: CmsStoreData = {
+        ...nextStore,
+        projects: cleanedProjects,
+      };
+
+      if (!authenticated) {
+        setStore(sanitizedStore);
+        setDraftStore(sanitizedStore);
+        saveDraftPreviewStore(sanitizedStore);
+        try {
+          localStorage.setItem(DRAFT_DIRTY_KEY, '1');
+        } catch {
+          // Ignore
+        }
+        setHasUnpublishedDraft(true);
+        showNotice(
+          'info',
+          'Applied to Draft Preview! Click "Preview" in the top bar to open it in a new tab, or sign in with Google to publish live.'
+        );
+        return sanitizedStore;
+      }
+
+      const saved = await savePublicCmsToFirestore(sanitizedStore);
+      const nextLive: CmsStoreData = {
+        ...saved,
+        enquiries: sanitizedStore.enquiries,
+      };
+      setStore(nextLive);
+      setDraftStore(nextLive);
+      saveDraftPreviewStore(nextLive);
+      try {
+        localStorage.removeItem(DRAFT_DIRTY_KEY);
+      } catch {
+        // Ignore
+      }
+      setHasUnpublishedDraft(false);
+      await refreshCms();
+      showNotice('success', successText);
+      return saved;
+    },
+    [authenticated, refreshCms, showNotice]
+  );
+
+  const handlePublishDraftToLive = async () => {
+    if (!draftStore) return;
+    if (!authenticated) {
+      await handleGoogleSignIn();
+      return;
+    }
+    setPublishingDraft(true);
+    try {
+      await persistStoreChanges(
+        draftStore,
+        'All draft changes published live to Firebase across every device!'
+      );
+    } catch (err) {
+      showNotice(
+        'error',
+        err instanceof Error ? err.message : 'Failed to publish draft changes.'
+      );
+    } finally {
+      setPublishingDraft(false);
+    }
+  };
+
+  const handleDiscardDraft = () => {
+    if (!store) return;
+    clearDraftPreviewStore();
+    try {
+      localStorage.removeItem(DRAFT_DIRTY_KEY);
     } catch {
-      setLoginError('Network error while verifying passcode.');
+      // Ignore
+    }
+    if (authenticated) {
+      setDraftStore(store);
+      saveDraftPreviewStore(store);
+      setHasUnpublishedDraft(false);
+      showNotice('info', 'Discarded unpublished draft edits and synced with live site.');
+    } else {
+      void loadAdminData(false).then(() => {
+        showNotice('info', 'Reset Open Showcase draft edits back to live website state.');
+      });
+    }
+  };
+
+  const handleToggleLoginLock = async (enable: boolean) => {
+    if (!store || !authenticated) {
+      showNotice('info', 'Please sign in with Google first to lock or unlock admin access.');
+      return;
+    }
+    try {
+      const base = draftStore || store;
+      const nextStore: CmsStoreData = {
+        ...base,
+        siteConfig: mergeSiteConfigSafe({
+          ...base.siteConfig,
+          requireAdminLogin: enable,
+        }),
+      };
+      await persistStoreChanges(
+        nextStore,
+        enable
+          ? 'Google Login Lock enabled — /wp-admin now requires authorized Google Sign-In.'
+          : 'Admin opened for client showcase — /wp-admin can now be viewed without signing in.'
+      );
+      setLoginRequired(enable);
+    } catch (err) {
+      showNotice(
+        'error',
+        err instanceof Error ? err.message : 'Failed to update login lock setting.'
+      );
     }
   };
 
   const handleUploadFile = async (file: File): Promise<MediaItem | null> => {
-    const dataBase64 = await readFileAsBase64(file);
-    const res = await fetch('/api/admin/media/upload', {
-      method: 'POST',
-      headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({
-        filename: file.name,
-        mimeType: file.type,
-        dataBase64,
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Upload failed.');
+    if (!authenticated || !authUser) {
+      const compressed = await compressImageForFirestore(file);
+      const res = saveBrowserUpload(
+        compressed.filename,
+        compressed.dataUrl,
+        compressed.sizeBytes
+      );
+      setMedia(res.media);
+      showNotice(
+        'info',
+        `Staged "${res.mediaItem.filename}" in Browser Preview Library (Sign in with Google to upload permanently to Firebase).`
+      );
+      return res.mediaItem;
     }
-    setMedia(data.media || []);
-    if (data.storageStats) {
-      setStorageStats(data.storageStats);
-    }
-    showNotice('success', `Uploaded "${data.mediaItem.filename}" to Media Library.`);
-    return data.mediaItem as MediaItem;
+
+    const result = await uploadCompressedMediaToFirestore(file, authUser.uid);
+    setMedia(result.media);
+    setStorageStats(result.storageStats);
+    const savedKb =
+      result.mediaItem.originalSizeBytes && result.mediaItem.originalSizeBytes > result.mediaItem.sizeBytes
+        ? ` (compressed from ${(result.mediaItem.originalSizeBytes / 1024).toFixed(0)} KB to ${(result.mediaItem.sizeBytes / 1024).toFixed(0)} KB)`
+        : '';
+    showNotice(
+      'success',
+      `Uploaded "${result.mediaItem.filename}" to Firebase Cloud${savedKb}.`
+    );
+    return result.mediaItem;
   };
 
   const handleSaveSite = async (nextConfig: StudioSiteConfig) => {
-    const res = await fetch('/api/admin/site', {
-      method: 'PUT',
-      headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(nextConfig),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      showNotice('error', data.error || 'Failed to save site settings.');
-      return;
+    const active = draftStore || store;
+    if (!active) return;
+    try {
+      const nextStore: CmsStoreData = {
+        ...active,
+        siteConfig: mergeSiteConfigSafe({ ...active.siteConfig, ...nextConfig }),
+      };
+      await persistStoreChanges(
+        nextStore,
+        'Site copy, layout, and branding synced live across all devices via Firebase.'
+      );
+    } catch (err) {
+      showNotice(
+        'error',
+        err instanceof Error ? err.message : 'Failed to save site settings to Firebase.'
+      );
     }
-    setStore((prev) => (prev ? { ...prev, siteConfig: data.siteConfig } : prev));
-    await refreshCms();
-    showNotice('success', 'Site copy, images, and contact channels updated live.');
   };
 
   const handleSaveProject = async (payload: ProjectDetail, isNew: boolean) => {
-    const endpoint = isNew
-      ? '/api/admin/projects'
-      : `/api/admin/projects/${encodeURIComponent(payload.id)}`;
-    const method = isNew ? 'POST' : 'PUT';
+    const active = draftStore || store;
+    if (!active) return;
+    try {
+      let savedProject: ProjectDetail;
+      let nextProjects: ProjectDetail[];
+      const cleanBaseProjects = active.projects.filter(
+        (p) => p.id !== '__preview_new_project__'
+      );
 
-    const res = await fetch(endpoint, {
-      method,
-      headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      showNotice('error', data.error || 'Failed to save project.');
-      return;
+      if (isNew) {
+        savedProject = buildBrowserProject(payload, cleanBaseProjects.length);
+        if (cleanBaseProjects.some((p) => p.id === savedProject.id)) {
+          savedProject.id = `${savedProject.id}-${Math.floor(100 + Math.random() * 900)}`;
+        }
+        nextProjects = [savedProject, ...cleanBaseProjects];
+      } else {
+        const existing = cleanBaseProjects.find((p) => p.id === payload.id);
+        savedProject = {
+          ...(existing || payload),
+          ...payload,
+          id: existing ? existing.id : payload.id,
+          updatedAt: new Date().toISOString(),
+        };
+        nextProjects = cleanBaseProjects.map((p) =>
+          p.id === savedProject.id ? savedProject : p
+        );
+      }
+
+      await persistStoreChanges(
+        { ...active, projects: nextProjects },
+        isNew
+          ? `Project "${savedProject.title}" published live to Firebase portfolio.`
+          : `Project "${savedProject.title}" updated across all devices.`
+      );
+      setEditingProject(null);
+      setIsCreatingProject(false);
+    } catch (err) {
+      showNotice(
+        'error',
+        err instanceof Error ? err.message : 'Failed to save project to Firebase.'
+      );
     }
-    setStore((prev) => (prev ? { ...prev, projects: data.projects } : prev));
-    setEditingProject(null);
-    setIsCreatingProject(false);
-    await refreshCms();
-    showNotice(
-      'success',
-      isNew
-        ? `Project "${data.project.title}" published to portfolio.`
-        : `Project "${data.project.title}" updated.`
-    );
   };
 
   const handleToggleProjectFlag = async (
     project: ProjectDetail,
     patch: Partial<ProjectDetail>
   ) => {
-    const res = await fetch(`/api/admin/projects/${encodeURIComponent(project.id)}`, {
-      method: 'PUT',
-      headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(patch),
-    });
-    const data = await res.json();
-    if (!res.ok) return;
-    setStore((prev) => (prev ? { ...prev, projects: data.projects } : prev));
-    await refreshCms();
+    const active = draftStore || store;
+    if (!active) return;
+    try {
+      const nextProjects = active.projects.map((p) =>
+        p.id === project.id
+          ? { ...p, ...patch, updatedAt: new Date().toISOString() }
+          : p
+      );
+      await persistStoreChanges(
+        { ...active, projects: nextProjects },
+        `Updated "${project.title}".`
+      );
+    } catch (err) {
+      showNotice(
+        'error',
+        err instanceof Error ? err.message : 'Failed to update project status.'
+      );
+    }
   };
 
   const handleDuplicateProject = async (project: ProjectDetail) => {
@@ -309,199 +688,288 @@ export const AdminPage: React.FC = () => {
   };
 
   const handleMoveProject = async (index: number, direction: -1 | 1) => {
-    if (!store) return;
+    const active = draftStore || store;
+    if (!active) return;
     const target = index + direction;
-    if (target < 0 || target >= store.projects.length) return;
-    const nextList = [...store.projects];
+    if (target < 0 || target >= active.projects.length) return;
+    const nextList = [...active.projects];
     const [moved] = nextList.splice(index, 1);
     nextList.splice(target, 0, moved);
 
-    setStore({ ...store, projects: nextList });
-    await fetch('/api/admin/projects-reorder', {
-      method: 'PUT',
-      headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ orderedIds: nextList.map((p) => p.id) }),
-    });
-    await refreshCms();
-    showNotice('success', 'Portfolio display order updated.');
+    try {
+      await persistStoreChanges(
+        { ...active, projects: nextList },
+        'Portfolio display order updated in Firebase.'
+      );
+    } catch (err) {
+      showNotice(
+        'error',
+        err instanceof Error ? err.message : 'Failed to reorder portfolio.'
+      );
+    }
   };
 
   const handleDropProject = async (fromId: string, toId: string) => {
-    if (!store || fromId === toId) return;
-    const fromIdx = store.projects.findIndex((p) => p.id === fromId);
-    const toIdx = store.projects.findIndex((p) => p.id === toId);
+    const active = draftStore || store;
+    if (!active || fromId === toId) return;
+    const fromIdx = active.projects.findIndex((p) => p.id === fromId);
+    const toIdx = active.projects.findIndex((p) => p.id === toId);
     if (fromIdx === -1 || toIdx === -1) return;
 
-    const nextList = [...store.projects];
+    const nextList = [...active.projects];
     const [moved] = nextList.splice(fromIdx, 1);
     nextList.splice(toIdx, 0, moved);
 
-    setStore({ ...store, projects: nextList });
-    await fetch('/api/admin/projects-reorder', {
-      method: 'PUT',
-      headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ orderedIds: nextList.map((p) => p.id) }),
-    });
-    await refreshCms();
-    showNotice('success', 'Portfolio display order updated via drag & drop.');
+    try {
+      await persistStoreChanges(
+        { ...active, projects: nextList },
+        'Portfolio display order updated via drag & drop.'
+      );
+    } catch (err) {
+      showNotice(
+        'error',
+        err instanceof Error ? err.message : 'Failed to reorder portfolio.'
+      );
+    }
   };
 
   const handleDeleteProject = async (id: string) => {
-    const res = await fetch(`/api/admin/projects/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-      headers: authHeaders(),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      showNotice('error', data.error || 'Could not delete project.');
-      return;
+    const active = draftStore || store;
+    if (!active) return;
+    try {
+      const nextProjects = active.projects.filter((p) => p.id !== id);
+      await persistStoreChanges(
+        { ...active, projects: nextProjects },
+        'Project removed from portfolio.'
+      );
+      setConfirmDeleteProjectId(null);
+    } catch (err) {
+      showNotice(
+        'error',
+        err instanceof Error ? err.message : 'Could not delete project.'
+      );
     }
-    setStore((prev) => (prev ? { ...prev, projects: data.projects } : prev));
-    setConfirmDeleteProjectId(null);
-    await refreshCms();
-    showNotice('success', 'Project removed from portfolio.');
   };
 
   const handleSaveServices = async (services: ServiceItem[]) => {
-    const res = await fetch('/api/admin/services', {
-      method: 'PUT',
-      headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ services }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      showNotice('error', data.error || 'Failed to save services.');
-      return;
+    const active = draftStore || store;
+    if (!active) return;
+    try {
+      const normalized: ServiceItem[] = services.map((s, idx) => ({
+        ...s,
+        id: s.id || `srv-${idx + 1}`,
+        number: s.number || String(idx + 1).padStart(2, '0'),
+        status: s.status === 'draft' ? 'draft' : 'published',
+      }));
+      await persistStoreChanges(
+        { ...active, services: normalized },
+        'Studio services updated in Firebase.'
+      );
+    } catch (err) {
+      showNotice(
+        'error',
+        err instanceof Error ? err.message : 'Failed to save services.'
+      );
     }
-    setStore((prev) => (prev ? { ...prev, services: data.services } : prev));
-    await refreshCms();
-    showNotice('success', 'Studio services updated.');
   };
 
   const handleSaveProcess = async (
     processSteps: ProcessStep[],
     comparisonCases?: DrawingComparisonCase[]
   ) => {
-    const res = await fetch('/api/admin/process', {
-      method: 'PUT',
-      headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ processSteps, comparisonCases }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      showNotice('error', data.error || 'Failed to update process stages.');
-      return;
+    const active = draftStore || store;
+    if (!active) return;
+    try {
+      await persistStoreChanges(
+        {
+          ...active,
+          processSteps,
+          comparisonCases: comparisonCases || active.comparisonCases,
+        },
+        'Design process stages & 2D/3D comparison studies saved to Firebase.'
+      );
+    } catch (err) {
+      showNotice(
+        'error',
+        err instanceof Error ? err.message : 'Failed to update process stages.'
+      );
     }
-    setStore((prev) =>
-      prev
-        ? {
-            ...prev,
-            processSteps: data.processSteps,
-            comparisonCases: data.comparisonCases || prev.comparisonCases,
-          }
-        : prev
-    );
-    await refreshCms();
-    showNotice('success', 'Design process stages & 2D/3D comparison studies saved.');
   };
 
   const handleUpdateEnquiry = async (
     id: string,
     payload: { status?: EnquiryStatus; internalNote?: string }
   ) => {
-    const res = await fetch(`/api/admin/enquiries/${encodeURIComponent(id)}`, {
-      method: 'PATCH',
-      headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      showNotice('error', data.error || 'Failed to update enquiry.');
+    if (!store) return;
+    if (!authenticated) {
+      const nextEnquiries = store.enquiries.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              status: payload.status ?? item.status,
+              internalNote:
+                typeof payload.internalNote === 'string'
+                  ? payload.internalNote
+                  : item.internalNote,
+            }
+          : item
+      );
+      setStore({ ...store, enquiries: nextEnquiries });
+      showNotice(
+        'info',
+        'Updated sample showcase enquiry (Sign in with Google to manage live client enquiries).'
+      );
       return;
     }
-    setStore((prev) => (prev ? { ...prev, enquiries: data.enquiries } : prev));
-    showNotice('success', 'Enquiry status saved.');
+
+    try {
+      await updateEnquiryInFirestore(id, payload);
+      const nextEnquiries = store.enquiries.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              status: payload.status ?? item.status,
+              internalNote:
+                typeof payload.internalNote === 'string'
+                  ? payload.internalNote
+                  : item.internalNote,
+            }
+          : item
+      );
+      setStore({ ...store, enquiries: nextEnquiries });
+      showNotice('success', 'Enquiry status synced to Firebase.');
+    } catch (err) {
+      showNotice(
+        'error',
+        err instanceof Error ? err.message : 'Failed to update enquiry.'
+      );
+    }
   };
 
   const handleDeleteEnquiry = async (id: string) => {
-    const res = await fetch(`/api/admin/enquiries/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
-      headers: authHeaders(),
-    });
-    const data = await res.json();
-    if (!res.ok) return;
-    setStore((prev) => (prev ? { ...prev, enquiries: data.enquiries } : prev));
-    showNotice('success', 'Enquiry deleted.');
+    if (!store) return;
+    if (!authenticated) {
+      showNotice(
+        'info',
+        'Sample showcase enquiry cannot be permanently deleted; sign in with Google for live enquiry actions.'
+      );
+      return;
+    }
+
+    try {
+      await deleteEnquiryFromFirestore(id);
+      setStore({
+        ...store,
+        enquiries: store.enquiries.filter((e) => e.id !== id),
+      });
+      showNotice('success', 'Enquiry deleted permanently from Firebase.');
+    } catch (err) {
+      showNotice(
+        'error',
+        err instanceof Error ? err.message : 'Failed to delete enquiry.'
+      );
+    }
   };
 
   const handleDeleteMediaItem = async (item: MediaItem) => {
-    const res = await fetch(
-      `/api/admin/media/${encodeURIComponent(item.filename)}?source=${encodeURIComponent(item.source)}`,
-      {
-        method: 'DELETE',
-        headers: authHeaders(),
-      }
-    );
-    const data = await res.json();
-    if (!res.ok) {
-      showNotice('error', data.error || 'Cannot delete media file.');
-      throw new Error(data.error || 'Cannot delete media file.');
-    }
-    setMedia(data.media || []);
-    if (data.storageStats) {
-      setStorageStats(data.storageStats);
-    }
-    if (data.store) {
-      setStore(data.store);
-    }
-    setConfirmDeleteMediaUrl(null);
-    await refreshCms();
-    showNotice('success', `Deleted "${item.filename}" and scrubbed stale image references.`);
-  };
+    const active = draftStore || store;
+    if (!active) return;
 
-  const handlePasscodeConfig = async (enable: boolean) => {
-    const res = await fetch('/api/admin/auth/passcode', {
-      method: 'POST',
-      headers: authHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ enable, passcode: newPasscode }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      showNotice('error', data.error || 'Could not update passcode settings.');
+    if (!authenticated) {
+      try {
+        const res = deleteBrowserMedia(item.filename);
+        setMedia(res.media);
+        setConfirmDeleteMediaUrl(null);
+        showNotice('success', `Removed "${item.filename}" from Browser Preview Library.`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Cannot delete media file.';
+        showNotice('error', msg);
+        throw err;
+      }
       return;
     }
-    setPasscodeEnabled(Boolean(data.passcodeEnabled));
-    if (data.token) {
-      localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
-      setAdminToken(data.token);
+
+    try {
+      const res = await deleteMediaFromFirestore(item, active);
+      setMedia(res.media);
+      setStore(res.store);
+      setDraftStore(res.store);
+      saveDraftPreviewStore(res.store);
+      setStorageStats(res.storageStats);
+      setConfirmDeleteMediaUrl(null);
+      await refreshCms();
+      showNotice(
+        'success',
+        `Deleted "${item.filename}" from Firebase to free cloud storage quota.`
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Cannot delete media file.';
+      showNotice('error', msg);
+      throw err;
     }
-    setNewPasscode('');
-    showNotice(
-      'success',
-      data.passcodeEnabled
-        ? 'Studio Admin passcode protection enabled.'
-        : 'Passcode protection disabled.'
-    );
   };
 
   const handleResetDefaults = async () => {
-    const res = await fetch('/api/admin/reset', {
-      method: 'POST',
-      headers: authHeaders(),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      showNotice('error', 'Failed to reset CMS store.');
-      return;
+    const active = draftStore || store;
+    if (!active) return;
+    try {
+      const defaultHydrated = hydrateCmsStore(DEFAULT_CMS_DATA);
+      await persistStoreChanges(
+        {
+          ...defaultHydrated,
+          enquiries: active.enquiries,
+        },
+        'Restored default Spaces by Muskan portfolio & copy.'
+      );
+      setConfirmResetModal(false);
+    } catch (err) {
+      showNotice(
+        'error',
+        err instanceof Error ? err.message : 'Failed to reset CMS store.'
+      );
     }
-    setStore(data.store);
-    setConfirmResetModal(false);
-    await refreshCms();
-    showNotice('success', 'Restored default Spaces by Muskan portfolio & copy.');
   };
 
-  // Passcode Lock Screen
-  if (authChecked && passcodeEnabled && !authenticated) {
+  const handleExportJsonBackup = () => {
+    const active = draftStore || store;
+    if (!active) return;
+    const backup = {
+      exportedAt: new Date().toISOString(),
+      firebaseProject: FIREBASE_PROJECT_INFO,
+      cms: {
+        siteConfig: active.siteConfig,
+        projects: active.projects,
+        services: active.services,
+        processSteps: active.processSteps,
+        craftDetails: active.craftDetails,
+        comparisonCases: active.comparisonCases,
+      },
+      enquiries: authenticated ? active.enquiries : [],
+      mediaIndex: media.filter((m) => m.source === 'uploads'),
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `spaces-by-muskan-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showNotice('success', 'Downloaded complete studio CMS JSON backup.');
+  };
+
+  // Loading auth state screen
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-[#F0F0F1] flex items-center justify-center p-4 font-sans text-xs text-[#646970]">
+        Loading Spaces by Muskan Studio Admin...
+      </div>
+    );
+  }
+
+  // Firebase Google Auth Sign-In Screen (only shown when Login Lock is enabled)
+  if (loginRequired && !authenticated) {
     return (
       <div className="min-h-screen bg-[#F0F0F1] flex items-center justify-center p-4 font-sans text-[#1D2327]">
         <div className="w-full max-w-sm space-y-5">
@@ -510,37 +978,66 @@ export const AdminPage: React.FC = () => {
               <Lock className="w-6 h-6 text-[#72AEE6]" />
             </div>
             <h1 className="text-lg font-medium">Spaces by Muskan · Studio Admin</h1>
+            <p className="text-xs text-[#646970]">
+              Protected Studio Login · Firebase Cloud Sync
+            </p>
           </div>
 
-          <form
-            onSubmit={handleLoginSubmit}
-            className="bg-white border border-[#C3C4C7] p-6 space-y-4 shadow-xs"
-          >
+          <div className="bg-white border border-[#C3C4C7] p-6 space-y-4 shadow-xs">
             {loginError && (
               <div className="p-2.5 bg-[#FCF0F1] border-l-4 border-[#D63638] text-xs text-[#8A2424]">
                 {loginError}
               </div>
             )}
-            <div>
-              <label className="block text-xs font-medium text-[#1D2327] mb-1">
-                Studio Admin Passcode
-              </label>
-              <input
-                type="password"
-                required
-                value={loginPasscode}
-                onChange={(e) => setLoginPasscode(e.target.value)}
-                placeholder="Enter passcode"
-                className="w-full px-3 py-2 text-sm border border-[#8C8F94] focus:border-[#2271B1] focus:outline-none"
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full py-2 bg-[#2271B1] hover:bg-[#135E96] text-white text-xs font-semibold cursor-pointer"
-            >
-              Log In to Studio Backend
-            </button>
-          </form>
+
+            {unauthorizedEmail ? (
+              <div className="space-y-3 text-xs">
+                <div className="p-3 bg-[#FCF0F1] border-l-4 border-[#D63638] text-[#8A2424] leading-relaxed">
+                  Signed in as <strong>{unauthorizedEmail}</strong>, which does not have admin permission on this studio project.
+                </div>
+                <p className="text-[#50575E] leading-relaxed">
+                  Please sign in with the authorized studio Google account (
+                  <span className="font-mono">{FIREBASE_PROJECT_INFO.primaryAdminEmail}</span>).
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleGoogleSignIn()}
+                    disabled={signingIn}
+                    className="flex-1 py-2 bg-[#2271B1] hover:bg-[#135E96] text-white text-xs font-semibold cursor-pointer disabled:opacity-60"
+                  >
+                    {signingIn ? 'Opening Google...' : 'Switch Google Account'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleSignOut()}
+                    className="px-3 py-2 bg-white border border-[#C3C4C7] hover:border-[#2271B1] text-xs text-[#50575E] cursor-pointer"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs text-[#50575E] leading-relaxed">
+                  Sign in with Google to manage portfolio projects, upload compressed room photography to Firebase, edit site copy, and view client enquiries from any phone or computer.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleGoogleSignIn()}
+                  disabled={signingIn}
+                  className="w-full py-2.5 px-4 bg-[#2271B1] hover:bg-[#135E96] text-white text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60"
+                >
+                  <Cloud className="w-4 h-4" />
+                  <span>{signingIn ? 'Connecting to Google...' : 'Sign in with Google'}</span>
+                </button>
+                <div className="pt-2 border-t border-[#F0F0F1] text-[11px] text-[#646970] font-mono flex items-center justify-between">
+                  <span>Project: {FIREBASE_PROJECT_INFO.projectId}</span>
+                  <span>Spark Free Tier</span>
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="text-center">
             <Link to="/" className="text-xs text-[#50575E] hover:text-[#2271B1]">
@@ -552,9 +1049,10 @@ export const AdminPage: React.FC = () => {
     );
   }
 
-  const projects = store?.projects || [];
-  const enquiries = store?.enquiries || [];
-  const services = store?.services || [];
+  const activeStore = draftStore || store;
+  const projects = activeStore?.projects || [];
+  const enquiries = activeStore?.enquiries || [];
+  const services = activeStore?.services || [];
   const newEnquiriesCount = enquiries.filter((e) => e.status === 'new').length;
 
   const filteredProjects = projects.filter((p) => {
@@ -616,7 +1114,7 @@ export const AdminPage: React.FC = () => {
     <div className="min-h-screen bg-[#F0F0F1] text-[#1D2327] font-sans flex flex-col">
       {/* AUTHENTIC WORDPRESS TOP ADMIN BAR (36px) */}
       <header className="h-9 bg-[#1D2327] text-[#F0F0F1] px-3 flex items-center justify-between text-xs sticky top-0 z-40 border-b border-[#2C3338]">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <button
             type="button"
             onClick={() => setMobileNavOpen(!mobileNavOpen)}
@@ -631,14 +1129,29 @@ export const AdminPage: React.FC = () => {
             className="flex items-center gap-1.5 px-2 py-1 hover:bg-[#2C3338] hover:text-[#72AEE6] transition-colors whitespace-nowrap"
           >
             <Home className="w-3.5 h-3.5" />
-            <span className="font-semibold">{store?.siteConfig.name || 'Spaces by Muskan'}</span>
+            <span className="font-semibold hidden sm:inline">
+              {activeStore?.siteConfig.name || 'Spaces by Muskan'}
+            </span>
             <ExternalLink className="w-3 h-3 opacity-70" />
           </Link>
+
+          <a
+            href="/?preview=1"
+            target="_blank"
+            rel="noopener noreferrer"
+            onMouseDown={syncDraftPreviewNow}
+            onClick={syncDraftPreviewNow}
+            title="Open site in a new tab with current CMS changes applied before publishing live"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#2271B1] hover:bg-[#135E96] text-white font-semibold transition-colors whitespace-nowrap"
+          >
+            <Eye className="w-3.5 h-3.5" />
+            <span>Preview</span>
+          </a>
 
           <button
             type="button"
             onClick={() => handleSelectTab('enquiries')}
-            className="hidden sm:flex items-center gap-1.5 px-2 py-1 hover:bg-[#2C3338] hover:text-[#72AEE6] transition-colors cursor-pointer whitespace-nowrap"
+            className="hidden lg:flex items-center gap-1.5 px-2 py-1 hover:bg-[#2C3338] hover:text-[#72AEE6] transition-colors cursor-pointer whitespace-nowrap"
           >
             <ShoppingBag className="w-3.5 h-3.5 text-[#B297DB]" />
             <span className="font-mono tabular-nums">{newEnquiriesCount} New</span>
@@ -651,35 +1164,68 @@ export const AdminPage: React.FC = () => {
               setEditingProject(null);
               setIsCreatingProject(true);
             }}
-            className="hidden sm:flex items-center gap-1 px-2 py-1 hover:bg-[#2C3338] hover:text-[#72AEE6] transition-colors cursor-pointer whitespace-nowrap"
+            className="hidden lg:flex items-center gap-1 px-2 py-1 hover:bg-[#2C3338] hover:text-[#72AEE6] transition-colors cursor-pointer whitespace-nowrap"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>New Project</span>
           </button>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {authenticated ? (
+            <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 bg-[#2C3338] text-[11px] font-mono text-[#72AEE6]">
+              <Cloud className="w-3 h-3" />
+              <span>Firebase Live</span>
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void handleGoogleSignIn()}
+              disabled={signingIn}
+              title="Sign in with Google to publish changes live to Firebase or lock admin access"
+              className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-[#2C3338] hover:bg-[#2271B1] text-[11px] font-mono text-[#F0C33C] hover:text-white transition-colors cursor-pointer whitespace-nowrap"
+            >
+              <Unlock className="w-3 h-3" />
+              <span>{signingIn ? 'Signing in...' : 'Open Mode · Google Sign-In'}</span>
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => void loadAdminData()}
+            onClick={() => void loadAdminData(authenticated)}
             title="Refresh Store Data"
             className="p-1 text-[#C3C4C7] hover:text-white cursor-pointer"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           </button>
 
-          <div className="flex items-center gap-2 whitespace-nowrap">
-            <span className="hidden sm:inline text-[#C3C4C7]">
-              Howdy, <strong className="text-white font-medium">{store?.siteConfig.founder || 'Muskan Agarwal'}</strong>
+          <div className="hidden sm:flex items-center gap-2 whitespace-nowrap">
+            <span className="text-[#C3C4C7]">
+              Howdy,{' '}
+              <strong className="text-white font-medium">
+                {activeStore?.siteConfig.founder || 'Muskan Agarwal'}
+              </strong>
             </span>
-            {store?.siteConfig.logoEmblem && (
-              <img
-                src={store.siteConfig.logoEmblem}
+            {activeStore?.siteConfig.logoEmblem && (
+              <ResolvedImg
+                src={activeStore.siteConfig.logoEmblem}
+                preferThumb
                 alt="Admin Avatar"
                 className="w-5 h-5 rounded-full object-cover border border-white/20"
               />
             )}
           </div>
+
+          {authenticated && (
+            <button
+              type="button"
+              onClick={() => void handleSignOut()}
+              title="Sign out of Studio Admin"
+              className="flex items-center gap-1 px-2 py-1 hover:bg-[#2C3338] text-[#C3C4C7] hover:text-white transition-colors cursor-pointer"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden md:inline">Sign Out</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -731,10 +1277,21 @@ export const AdminPage: React.FC = () => {
               );
             })}
 
-            <div className="pt-4 mt-4 border-t border-[#2C3338] px-3">
+            <div className="pt-4 mt-4 border-t border-[#2C3338] px-3 space-y-2">
+              <a
+                href="/?preview=1"
+                target="_blank"
+                rel="noopener noreferrer"
+                onMouseDown={syncDraftPreviewNow}
+                onClick={syncDraftPreviewNow}
+                className="w-full py-2 px-2.5 bg-[#2271B1] hover:bg-[#135E96] text-white text-xs font-medium flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                <span>Preview Draft Site</span>
+              </a>
               <Link
                 to="/"
-                className="w-full py-2 px-2.5 bg-[#2C3338] hover:bg-[#2271B1] text-white text-xs flex items-center justify-center gap-1.5 transition-colors"
+                className="w-full py-2 px-2.5 bg-[#2C3338] hover:bg-[#3C434A] text-white text-xs flex items-center justify-center gap-1.5 transition-colors"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
                 <span>View Live Website</span>
@@ -746,25 +1303,93 @@ export const AdminPage: React.FC = () => {
         {/* MAIN WP WORKSPACE VIEWPORT */}
         <main className="flex-1 p-4 sm:p-6 overflow-x-hidden">
           <div className="max-w-6xl mx-auto space-y-5">
+            {/* Draft Preview / Open Mode Synchronization Banner */}
+            {(hasUnpublishedDraft || !authenticated) && activeStore && (
+              <div className="bg-white border border-[#C3C4C7] border-l-4 border-l-[#2271B1] px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs shadow-2xs">
+                <div className="space-y-0.5">
+                  <div className="font-semibold text-[#1D2327] flex items-center gap-2">
+                    <Eye className="w-3.5 h-3.5 text-[#2271B1]" />
+                    <span>
+                      {hasUnpublishedDraft
+                        ? 'Unpublished CMS Draft Ready to Preview'
+                        : 'Open Client Showcase Mode (No Login Required)'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-[#50575E]">
+                    {authenticated
+                      ? 'You have edits staged in Draft Preview. Click Preview to inspect them before publishing live to Firebase.'
+                      : 'Your client can freely test the entire backend from any phone without signing in. Sign in with Google when ready to publish changes live or enable a login lock.'}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <a
+                    href="/?preview=1"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onMouseDown={syncDraftPreviewNow}
+                    onClick={syncDraftPreviewNow}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#2271B1] hover:bg-[#135E96] text-white font-semibold transition-colors"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>Preview in New Tab</span>
+                  </a>
+
+                  {hasUnpublishedDraft && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={publishingDraft}
+                        onClick={() => void handlePublishDraftToLive()}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#00A32A] hover:bg-[#008A20] text-white font-semibold cursor-pointer disabled:opacity-60"
+                      >
+                        <Cloud className="w-3.5 h-3.5" />
+                        <span>
+                          {authenticated
+                            ? publishingDraft
+                              ? 'Publishing...'
+                              : 'Publish Draft Live'
+                            : 'Sign in & Publish Live'}
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDiscardDraft}
+                        className="px-2.5 py-1.5 bg-white border border-[#C3C4C7] hover:border-[#D63638] text-[#50575E] hover:text-[#B32D2E] cursor-pointer"
+                      >
+                        Discard Draft
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* WordPress Dismissible Screen Notice */}
             {notice && (
               <div
                 className={`bg-white border border-[#C3C4C7] border-l-4 px-4 py-2.5 flex items-center justify-between gap-3 text-xs shadow-2xs ${
-                  notice.type === 'success' ? 'border-l-[#00A32A]' : 'border-l-[#D63638]'
+                  notice.type === 'success'
+                    ? 'border-l-[#00A32A]'
+                    : notice.type === 'info'
+                    ? 'border-l-[#2271B1]'
+                    : 'border-l-[#D63638]'
                 }`}
               >
-                <span className="text-[#1D2327] font-medium">{notice.text}</span>
+                <div className="flex flex-wrap items-center gap-2 text-[#1D2327] font-medium">
+                  <span>{notice.text}</span>
+                </div>
                 <button
                   type="button"
                   onClick={() => setNotice(null)}
-                  className="text-[#646970] hover:text-[#1D2327] cursor-pointer"
+                  className="text-[#646970] hover:text-[#1D2327] cursor-pointer shrink-0"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
               </div>
             )}
 
-            {loading || !store ? (
+            {loading || !activeStore ? (
               <div className="bg-white border border-[#C3C4C7] p-12 text-center text-xs text-[#646970]">
                 Loading Spaces by Muskan Studio Backend...
               </div>
@@ -808,7 +1433,7 @@ export const AdminPage: React.FC = () => {
                           Welcome to your WordPress &amp; WooCommerce Studio Manager
                         </h2>
                         <p className="text-xs text-[#50575E] leading-relaxed max-w-2xl">
-                          Manage portfolio projects like a WooCommerce catalogue, upload 4K room photos to the Media Library, edit headlines and Vastu service copy, update your phone/WhatsApp/email details, and review incoming client enquiries.
+                          Manage portfolio projects like a WooCommerce catalogue, upload 4K room photos to the Media Library, edit headlines and Vastu service copy, update your phone/WhatsApp/email details, and preview every draft edit before publishing live.
                         </p>
                       </div>
                       <div className="md:col-span-4 flex flex-col gap-2">
@@ -820,13 +1445,17 @@ export const AdminPage: React.FC = () => {
                           <Upload className="w-3.5 h-3.5" />
                           <span>Upload New Portfolio Photos</span>
                         </button>
-                        <Link
-                          to="/"
+                        <a
+                          href="/?preview=1"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onMouseDown={syncDraftPreviewNow}
+                          onClick={syncDraftPreviewNow}
                           className="w-full py-2 px-3 bg-[#1D2327] hover:bg-[#2271B1] text-white text-xs font-medium flex items-center justify-center gap-2 transition-colors"
                         >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                          <span>Preview Public Storefront</span>
-                        </Link>
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Preview Site with Draft Changes</span>
+                        </a>
                       </div>
                     </div>
 
@@ -907,19 +1536,19 @@ export const AdminPage: React.FC = () => {
                         <div className="p-4 space-y-2.5 text-xs">
                           <div className="flex justify-between py-1 border-b border-[#F0F0F1]">
                             <span className="text-[#646970]">Telephone</span>
-                            <span className="font-mono text-[#1D2327]">{store.siteConfig.phone}</span>
+                            <span className="font-mono text-[#1D2327]">{activeStore.siteConfig.phone}</span>
                           </div>
                           <div className="flex justify-between py-1 border-b border-[#F0F0F1]">
                             <span className="text-[#646970]">WhatsApp Line</span>
-                            <span className="font-mono text-[#1D2327]">{store.siteConfig.whatsappNumber}</span>
+                            <span className="font-mono text-[#1D2327]">{activeStore.siteConfig.whatsappNumber}</span>
                           </div>
                           <div className="flex justify-between py-1 border-b border-[#F0F0F1]">
                             <span className="text-[#646970]">Studio Email</span>
-                            <span className="font-mono text-[#1D2327]">{store.siteConfig.email}</span>
+                            <span className="font-mono text-[#1D2327]">{activeStore.siteConfig.email}</span>
                           </div>
                           <div className="flex justify-between py-1">
                             <span className="text-[#646970]">Instagram</span>
-                            <span className="font-mono text-[#2271B1]">{store.siteConfig.instagramHandle}</span>
+                            <span className="font-mono text-[#2271B1]">{activeStore.siteConfig.instagramHandle}</span>
                           </div>
                         </div>
                       </div>
@@ -930,59 +1559,59 @@ export const AdminPage: React.FC = () => {
                             <div className="flex items-center gap-2">
                               <HardDrive className="w-4 h-4 text-[#2271B1]" />
                               <h3 className="text-xs font-semibold text-[#1D2327]">
-                                Local Media Storage &amp; 4K WebP Pipeline Capacity
+                                Firebase Firestore Cloud Storage (Spark Free Tier · 1 GiB)
                               </h3>
                             </div>
                             <span className="text-[11px] font-mono text-[#1E6B2F]">
-                              Local Disk Active (No External Image Host Required)
+                              Auto-WebP Compressed · IndexedDB Visitor Cache Active
                             </span>
                           </div>
                           <div className="p-4 grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
                             <div className="p-3 border border-[#DCDCDE] bg-[#FBFBFB]">
                               <span className="text-[10px] uppercase tracking-wider text-[#646970] block">
-                                Stored Originals
+                                Total Media Assets
                               </span>
                               <span className="text-lg font-mono font-semibold text-[#1D2327] tabular-nums">
                                 {storageStats.totalSourceImages} files
                               </span>
                               <span className="text-[11px] text-[#646970] block mt-0.5">
-                                {storageStats.archiveCount} Archive · {storageStats.uploadsCount} Uploaded
+                                {storageStats.archiveCount} 4K Archive · {storageStats.uploadsCount} Firebase Cloud
                               </span>
                             </div>
 
                             <div className="p-3 border border-[#DCDCDE] bg-[#FBFBFB]">
                               <span className="text-[10px] uppercase tracking-wider text-[#646970] block">
-                                Multi-Size WebP Variants
+                                Compression Space Saved
                               </span>
                               <span className="text-lg font-mono font-semibold text-[#2271B1] tabular-nums">
-                                {storageStats.totalWebpVariants} WebPs
+                                {((storageStats.originalBytesSaved || 0) / (1024 * 1024)).toFixed(2)} MB
                               </span>
                               <span className="text-[11px] text-[#646970] block mt-0.5">
-                                480w · 960w · 1440w · 2160w (4K)
+                                Crisp 1600px WebP + fast 420px thumbs
                               </span>
                             </div>
 
                             <div className="p-3 border border-[#DCDCDE] bg-[#FBFBFB]">
                               <span className="text-[10px] uppercase tracking-wider text-[#646970] block">
-                                Space Used
+                                Firebase Cloud Used
                               </span>
                               <span className="text-lg font-mono font-semibold text-[#1D2327] tabular-nums">
-                                {(storageStats.usedBytes / (1024 * 1024)).toFixed(1)} MB
+                                {(storageStats.usedBytes / (1024 * 1024)).toFixed(2)} MB
                               </span>
                               <span className="text-[11px] text-[#646970] block mt-0.5">
-                                Up to {storageStats.maxUploadMb} MB per photo upload
+                                Out of 1,024 MB Free Tier quota
                               </span>
                             </div>
 
                             <div className="p-3 border border-[#DCDCDE] bg-[#FBFBFB]">
                               <span className="text-[10px] uppercase tracking-wider text-[#646970] block">
-                                Server Disk Available
+                                Free Quota Remaining
                               </span>
                               <span className="text-lg font-mono font-semibold text-[#1E6B2F] tabular-nums">
-                                {(storageStats.freeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB
+                                {(storageStats.freeBytes / (1024 * 1024)).toFixed(1)} MB
                               </span>
                               <span className="text-[11px] text-[#646970] block mt-0.5">
-                                Local <span className="font-mono">public/uploads/</span> disk
+                                Deleting photos reclaims quota instantly
                               </span>
                             </div>
                           </div>
@@ -992,8 +1621,9 @@ export const AdminPage: React.FC = () => {
 
                     {/* REAL-TIME VISUAL BRANDING STUDIO PANEL */}
                     <AdminVisualBrandingPanel
-                      siteConfig={store.siteConfig}
+                      siteConfig={activeStore.siteConfig}
                       onSaveSite={handleSaveSite}
+                      onDraftChange={handleBrandingDraftChange}
                     />
                   </div>
                 )}
@@ -1009,6 +1639,7 @@ export const AdminPage: React.FC = () => {
                         onSave={handleSaveProject}
                         onUploadFile={handleUploadFile}
                         onDeleteMedia={handleDeleteMediaItem}
+                        onDraftChange={handleProjectDraftChange}
                         onCancel={() => {
                           setEditingProject(null);
                           setIsCreatingProject(false);
@@ -1166,8 +1797,9 @@ export const AdminPage: React.FC = () => {
                                       <GripVertical className="w-4 h-4" />
                                     </td>
                                     <td className="py-2 px-3">
-                                      <img
+                                      <ResolvedImg
                                         src={project.heroImage}
+                                        preferThumb
                                         alt={project.title}
                                         className="w-11 h-11 object-cover border border-[#DCDCDE] bg-[#F0F0F1]"
                                       />
@@ -1373,15 +2005,17 @@ export const AdminPage: React.FC = () => {
                     {storageStats && (
                       <div className="bg-white border border-[#C3C4C7] px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-[11px] text-[#50575E]">
                         <span>
-                          Stored locally in <span className="font-mono text-[#1D2327]">public/assets/muskan/</span> &amp;{' '}
-                          <span className="font-mono text-[#1D2327]">public/uploads/</span>:{' '}
+                          Synced on <span className="font-mono text-[#1D2327]">Firebase Firestore ({FIREBASE_PROJECT_INFO.projectId})</span>:{' '}
                           <strong className="text-[#1D2327]">
-                            {(storageStats.usedBytes / (1024 * 1024)).toFixed(1)} MB
+                            {(storageStats.usedBytes / (1024 * 1024)).toFixed(2)} MB
                           </strong>{' '}
-                          across {storageStats.totalSourceImages} source photos &amp; {storageStats.totalWebpVariants} WebP sizes.
+                          across {storageStats.uploadsCount} compressed cloud uploads
+                          {storageStats.originalBytesSaved
+                            ? ` (${(storageStats.originalBytesSaved / (1024 * 1024)).toFixed(1)} MB saved via WebP compression)`
+                            : ''}.
                         </span>
                         <span className="font-mono text-[#1E6B2F]">
-                          {(storageStats.freeBytes / (1024 * 1024 * 1024)).toFixed(1)} GB free · Max {storageStats.maxUploadMb} MB/photo
+                          {(storageStats.freeBytes / (1024 * 1024)).toFixed(1)} MB free of 1 GiB Spark tier · Instant delete
                         </span>
                       </div>
                     )}
@@ -1394,7 +2028,7 @@ export const AdminPage: React.FC = () => {
                             { id: 'all', label: `All (${media.length})` },
                             {
                               id: 'uploads',
-                              label: `Uploaded (${media.filter((m) => m.source === 'uploads').length})`,
+                              label: `Firebase Cloud (${media.filter((m) => m.source === 'uploads').length})`,
                             },
                             {
                               id: 'muskan',
@@ -1437,8 +2071,9 @@ export const AdminPage: React.FC = () => {
                           className="bg-white border border-[#C3C4C7] overflow-hidden flex flex-col justify-between"
                         >
                           <div className="aspect-square bg-[#E5E5E5] overflow-hidden">
-                            <img
+                            <ResolvedImg
                               src={item.url}
+                              preferThumb
                               alt={item.filename}
                               className="w-full h-full object-cover"
                             />
@@ -1449,7 +2084,10 @@ export const AdminPage: React.FC = () => {
                                 {item.filename}
                               </p>
                               <p className="text-[10px] font-mono text-[#646970] tabular-nums">
-                                {item.source === 'uploads' ? 'Uploaded' : '4K Archive'} · {(item.sizeBytes / 1024).toFixed(0)} KB
+                                {item.source === 'uploads' ? 'Firebase Cloud' : '4K Archive'} · {(item.sizeBytes / 1024).toFixed(0)} KB
+                                {item.originalSizeBytes && item.originalSizeBytes > item.sizeBytes
+                                  ? ` (from ${(item.originalSizeBytes / 1024).toFixed(0)} KB)`
+                                  : ''}
                                 {item.optimized ? ' · WebP' : ''}
                               </p>
                             </div>
@@ -1520,89 +2158,173 @@ export const AdminPage: React.FC = () => {
                     onSaveServices={handleSaveServices}
                     onUploadFile={handleUploadFile}
                     onDeleteMedia={handleDeleteMediaItem}
+                    onDraftChange={handleServicesDraftChange}
                   />
                 )}
 
                 {/* ================= 6. PAGES, LAYOUT ORDER, STYLE & SITE COPY EDITOR ================= */}
                 {activeTab === 'site' && (
                   <AdminSiteEditor
-                    siteConfig={store.siteConfig}
+                    siteConfig={activeStore.siteConfig}
                     media={media}
                     onSaveSite={handleSaveSite}
                     onUploadFile={handleUploadFile}
                     onDeleteMedia={handleDeleteMediaItem}
+                    onDraftChange={handleSiteDraftChange}
                   />
                 )}
 
                 {/* ================= 7. DESIGN PROCESS & 2D/3D COMPARISON EDITOR ================= */}
                 {activeTab === 'process' && (
                   <AdminProcessEditor
-                    processSteps={store.processSteps}
-                    comparisonCases={store.comparisonCases}
+                    processSteps={activeStore.processSteps}
+                    comparisonCases={activeStore.comparisonCases}
                     media={media}
                     onSaveProcess={handleSaveProcess}
                     onUploadFile={handleUploadFile}
                     onDeleteMedia={handleDeleteMediaItem}
+                    onDraftChange={handleProcessDraftChange}
                   />
                 )}
 
                 {/* ================= 8. PROMOTIONS, POPUP ADS & MOVING TICKER ================= */}
                 {activeTab === 'promotions' && (
                   <AdminPromotionsEditor
-                    siteConfig={store.siteConfig}
+                    siteConfig={activeStore.siteConfig}
                     services={services}
                     media={media}
                     onSaveSite={handleSaveSite}
                     onUploadFile={handleUploadFile}
                     onDeleteMedia={handleDeleteMediaItem}
+                    onDraftChange={handlePromotionsDraftChange}
                   />
                 )}
 
-                {/* ================= 8. SETTINGS & PASSCODE ================= */}
+                {/* ================= 9. SETTINGS, ACCESS LOCK & PORTABILITY ================= */}
                 {activeTab === 'settings' && (
                   <div className="space-y-5 max-w-3xl">
-                    <h1 className="text-xl font-normal text-[#1D2327]">General &amp; Security Settings</h1>
+                    <h1 className="text-xl font-normal text-[#1D2327]">
+                      Access Lock, Firebase Cloud &amp; Transfer Settings
+                    </h1>
 
-                    {/* Security Lock Card */}
+                    {/* Admin Login Credentials & Showcase Lock Card */}
                     <div className="bg-white border border-[#C3C4C7]">
                       <div className="px-4 py-2.5 border-b border-[#C3C4C7] bg-[#F6F7F7] flex items-center justify-between">
-                        <h2 className="text-xs font-semibold text-[#1D2327]">
-                          Admin Access Protection
-                        </h2>
+                        <div className="flex items-center gap-2">
+                          <ShieldCheck className="w-4 h-4 text-[#2271B1]" />
+                          <h2 className="text-xs font-semibold text-[#1D2327]">
+                            Admin Login Protection (Open Showcase vs Locked)
+                          </h2>
+                        </div>
                         <span
-                          className={`text-[11px] font-mono ${
-                            passcodeEnabled ? 'text-[#1E6B2F]' : 'text-[#646970]'
+                          className={`text-[11px] font-mono font-medium ${
+                            loginRequired ? 'text-[#1E6B2F]' : 'text-[#996800]'
                           }`}
                         >
-                          {passcodeEnabled ? 'Passcode Enabled' : 'Open Studio Workspace'}
+                          {loginRequired ? 'Google Login Required' : 'Open Client Showcase'}
                         </span>
                       </div>
                       <div className="p-4 space-y-3 text-xs">
                         <p className="text-[#50575E] leading-relaxed">
-                          Add an optional Studio Passcode so only authorized team members can open <span className="font-mono">/wp-admin</span> and edit portfolio items or view client enquiries.
+                          {loginRequired
+                            ? 'Login protection is ON. Visitors opening /wp-admin must sign in with your authorized Google account before viewing the studio dashboard.'
+                            : 'Open Showcase is ON so your client can explore the entire backend from her phone without your login credentials and test edits with the Preview button. Your real Firebase database and real customer enquiries stay protected until you sign in.'}
                         </p>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <input
-                            type="password"
-                            value={newPasscode}
-                            onChange={(e) => setNewPasscode(e.target.value)}
-                            placeholder="New passcode (min 4 characters)"
-                            className="px-3 py-1.5 border border-[#8C8F94] focus:border-[#2271B1] focus:outline-none w-64"
-                          />
+
+                        {authenticated ? (
+                          <div className="flex flex-wrap items-center gap-2">
+                            {loginRequired ? (
+                              <button
+                                type="button"
+                                onClick={() => void handleToggleLoginLock(false)}
+                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-[#C3C4C7] hover:border-[#2271B1] text-[#1D2327] font-medium cursor-pointer"
+                              >
+                                <Unlock className="w-3.5 h-3.5" />
+                                <span>Re-Open for Client Showcase (No Login)</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => void handleToggleLoginLock(true)}
+                                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#2271B1] hover:bg-[#135E96] text-white font-semibold cursor-pointer"
+                              >
+                                <Lock className="w-3.5 h-3.5" />
+                                <span>Enable Google Login Lock Now</span>
+                              </button>
+                            )}
+                          </div>
+                        ) : (
                           <button
                             type="button"
-                            onClick={() => void handlePasscodeConfig(true)}
-                            className="px-3.5 py-1.5 bg-[#2271B1] hover:bg-[#135E96] text-white font-semibold cursor-pointer"
+                            onClick={() => void handleGoogleSignIn()}
+                            disabled={signingIn}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#2271B1] hover:bg-[#135E96] text-white font-semibold cursor-pointer disabled:opacity-60"
                           >
-                            {passcodeEnabled ? 'Update Passcode' : 'Enable Passcode Lock'}
+                            <Cloud className="w-3.5 h-3.5" />
+                            <span>
+                              {signingIn
+                                ? 'Opening Google...'
+                                : 'Sign in with Google to Enable Lock or Publish Live'}
+                            </span>
                           </button>
-                          {passcodeEnabled && (
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Firebase Project & Portability Card */}
+                    <div className="bg-white border border-[#C3C4C7]">
+                      <div className="px-4 py-2.5 border-b border-[#C3C4C7] bg-[#F6F7F7] flex items-center justify-between">
+                        <h2 className="text-xs font-semibold text-[#1D2327]">
+                          Dedicated Firebase Project &amp; Admin Session
+                        </h2>
+                        <span className="text-[11px] font-mono text-[#1E6B2F]">
+                          Spark Free Tier · Cross-Device Sync
+                        </span>
+                      </div>
+                      <div className="p-4 space-y-3 text-xs">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-[#FBFBFB] border border-[#DCDCDE] p-3 font-mono text-[11px]">
+                          <div>
+                            <span className="text-[#646970] block text-[10px] uppercase">
+                              Firebase Project ID
+                            </span>
+                            <span className="text-[#1D2327] font-semibold">
+                              {FIREBASE_PROJECT_INFO.projectId}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[#646970] block text-[10px] uppercase">
+                              Session Status
+                            </span>
+                            <span className="text-[#1D2327] font-semibold">
+                              {authenticated
+                                ? authUser?.email || FIREBASE_PROJECT_INFO.primaryAdminEmail
+                                : 'Open Client Preview (Not Signed In)'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className="text-[#50575E] leading-relaxed">
+                          Published portfolio edits, compressed cloud photos, and client enquiries are stored in your standalone Firebase Firestore project so updates sync across all devices and can be exported anytime.
+                        </p>
+
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={handleExportJsonBackup}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#2271B1] hover:bg-[#135E96] text-white font-semibold cursor-pointer"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Download Full CMS JSON Backup</span>
+                          </button>
+
+                          {authenticated && (
                             <button
                               type="button"
-                              onClick={() => void handlePasscodeConfig(false)}
-                              className="px-3 py-1.5 bg-white border border-[#C3C4C7] hover:border-[#D63638] text-[#B32D2E] cursor-pointer"
+                              onClick={() => void handleSignOut()}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-[#C3C4C7] hover:border-[#2271B1] text-[#1D2327] font-medium cursor-pointer"
                             >
-                              Disable Lock
+                              <LogOut className="w-3.5 h-3.5" />
+                              <span>Sign Out / Switch Google Account</span>
                             </button>
                           )}
                         </div>
@@ -1618,7 +2340,7 @@ export const AdminPage: React.FC = () => {
                       </div>
                       <div className="p-4 space-y-3 text-xs">
                         <p className="text-[#50575E] leading-relaxed">
-                          Reset all text copy, services, process stages, and default 6 portfolio projects back to the initial Spaces by Muskan release state. Client enquiries and uploaded images remain intact.
+                          Reset all text copy, services, process stages, and default 6 portfolio projects back to the initial Spaces by Muskan release state. Client enquiries and uploaded Firebase images remain intact.
                         </p>
                         {confirmResetModal ? (
                           <div className="p-3 bg-[#FCF0F1] border border-[#D63638] flex flex-wrap items-center justify-between gap-3">

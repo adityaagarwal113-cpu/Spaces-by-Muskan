@@ -1,6 +1,7 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Link, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence } from 'motion/react';
+import { Eye, X } from 'lucide-react';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { WhatsAppButton } from './components/WhatsAppButton';
@@ -10,7 +11,8 @@ import { EnquiryModal } from './components/EnquiryModal';
 import { AnnouncementTicker } from './components/AnnouncementTicker';
 import { PromoPopupBanner } from './components/PromoPopupBanner';
 import { EnquiryProvider } from './context/EnquiryContext';
-import { CmsProvider } from './context/CmsContext';
+import { CmsProvider, useCms } from './context/CmsContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Multi-Page Routes
 import { HomePage } from './pages/HomePage';
@@ -24,6 +26,7 @@ import { AdminPage } from './pages/AdminPage';
 
 const AppShell: React.FC = () => {
   const location = useLocation();
+  const { isPreviewMode, exitPreviewMode } = useCms();
   const isAdminRoute =
     location.pathname.startsWith('/wp-admin') || location.pathname.startsWith('/admin');
 
@@ -43,6 +46,33 @@ const AppShell: React.FC = () => {
       <ScrollProgressBar />
       <EnquiryModal />
       <PromoPopupBanner />
+
+      {isPreviewMode && (
+        <div className="bg-[#1D2327] text-white px-4 py-2 text-xs flex flex-wrap items-center justify-between gap-2 border-b border-[#2271B1] sticky top-0 z-[60]">
+          <div className="flex items-center gap-2">
+            <Eye className="w-3.5 h-3.5 text-[#72AEE6] shrink-0" />
+            <span>
+              <strong>Draft Preview Mode</strong> — Showing current CMS edits before publishing live.
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              to="/wp-admin"
+              className="px-2.5 py-1 bg-[#2271B1] hover:bg-[#135E96] text-white font-medium transition-colors"
+            >
+              Open Admin
+            </Link>
+            <button
+              type="button"
+              onClick={exitPreviewMode}
+              className="inline-flex items-center gap-1 px-2.5 py-1 bg-[#2C3338] hover:bg-[#3C434A] text-[#F0F0F1] cursor-pointer transition-colors"
+            >
+              <X className="w-3 h-3" />
+              <span>Exit Preview</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       <div
         id="storefront-shell"
@@ -77,13 +107,15 @@ const AppShell: React.FC = () => {
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <CmsProvider>
-        <EnquiryProvider>
-          <ScrollToTop />
-          <AppShell />
-        </EnquiryProvider>
-      </CmsProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <CmsProvider>
+          <EnquiryProvider>
+            <ScrollToTop />
+            <AppShell />
+          </EnquiryProvider>
+        </CmsProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }

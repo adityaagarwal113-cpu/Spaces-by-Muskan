@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -23,6 +23,7 @@ import {
 } from '../../types';
 import { MediaPickerModal } from './MediaPickerModal';
 import { PromoPopupBanner } from '../PromoPopupBanner';
+import { ResolvedImg } from '../OptimizedImage';
 
 interface AdminPromotionsEditorProps {
   siteConfig: StudioSiteConfig;
@@ -31,6 +32,10 @@ interface AdminPromotionsEditorProps {
   onSaveSite: (nextConfig: StudioSiteConfig) => Promise<void>;
   onUploadFile: (file: File) => Promise<MediaItem | null>;
   onDeleteMedia?: (item: MediaItem) => Promise<void>;
+  onDraftChange?: (patch: {
+    promoPopup: PromoPopupConfig;
+    announcementTicker: AnnouncementTickerConfig;
+  }) => void;
 }
 
 export const AdminPromotionsEditor: React.FC<AdminPromotionsEditorProps> = ({
@@ -40,6 +45,7 @@ export const AdminPromotionsEditor: React.FC<AdminPromotionsEditorProps> = ({
   onSaveSite,
   onUploadFile,
   onDeleteMedia,
+  onDraftChange,
 }) => {
   const [promo, setPromo] = useState<PromoPopupConfig>(
     siteConfig.promoPopup || DEFAULT_PROMO_POPUP
@@ -51,8 +57,20 @@ export const AdminPromotionsEditor: React.FC<AdminPromotionsEditorProps> = ({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [previewPopupOpen, setPreviewPopupOpen] = useState(false);
   const [newTickerLine, setNewTickerLine] = useState('');
+  const baselineRef = useRef<string>(
+    JSON.stringify({
+      promoPopup: siteConfig.promoPopup || DEFAULT_PROMO_POPUP,
+      announcementTicker: siteConfig.announcementTicker || DEFAULT_ANNOUNCEMENT_TICKER,
+    })
+  );
 
   useEffect(() => {
+    const nextPromo = siteConfig.promoPopup || DEFAULT_PROMO_POPUP;
+    const nextTicker = siteConfig.announcementTicker || DEFAULT_ANNOUNCEMENT_TICKER;
+    baselineRef.current = JSON.stringify({
+      promoPopup: nextPromo,
+      announcementTicker: nextTicker,
+    });
     if (siteConfig.promoPopup) {
       setPromo(siteConfig.promoPopup);
     }
@@ -60,6 +78,13 @@ export const AdminPromotionsEditor: React.FC<AdminPromotionsEditorProps> = ({
       setTicker(siteConfig.announcementTicker);
     }
   }, [siteConfig]);
+
+  useEffect(() => {
+    if (!onDraftChange) return;
+    const payload = { promoPopup: promo, announcementTicker: ticker };
+    if (JSON.stringify(payload) === baselineRef.current) return;
+    onDraftChange(payload);
+  }, [promo, ticker, onDraftChange]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,7 +179,7 @@ export const AdminPromotionsEditor: React.FC<AdminPromotionsEditorProps> = ({
             </label>
             <div className="aspect-[4/3] bg-[#F0F0F1] border border-[#C3C4C7] overflow-hidden flex items-center justify-center">
               {promo.image ? (
-                <img
+                <ResolvedImg
                   src={promo.image}
                   alt="Popup preview"
                   className="w-full h-full object-cover"

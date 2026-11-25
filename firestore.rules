@@ -1,0 +1,299 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 2 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdminToken() {
+      return isSignedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email == 'adityaagarwal113@gmail.com';
+    }
+
+    function isAdmin() {
+      return isAdminToken()
+        || (isSignedIn()
+            && request.auth.token.email_verified == true
+            && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    // Validation Blueprint: /cms/public
+    function isValidCmsPublic(data) {
+      return data.keys().hasAll([
+          'siteConfig',
+          'projects',
+          'services',
+          'processSteps',
+          'craftDetails',
+          'comparisonCases',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'siteConfig',
+          'projects',
+          'services',
+          'processSteps',
+          'craftDetails',
+          'comparisonCases',
+          'updatedAt'
+        ])
+        && data.siteConfig is map
+        && data.siteConfig.name is string
+        && data.siteConfig.name.size() >= 1
+        && data.siteConfig.name.size() <= 160
+        && data.projects is list
+        && data.projects.size() <= 100
+        && (data.projects.size() == 0 || (data.projects[0] is map && data.projects[0].id is string && data.projects[0].title is string))
+        && data.services is list
+        && data.services.size() <= 30
+        && (data.services.size() == 0 || (data.services[0] is map && data.services[0].title is string))
+        && data.processSteps is list
+        && data.processSteps.size() <= 20
+        && (data.processSteps.size() == 0 || (data.processSteps[0] is map && data.processSteps[0].title is string))
+        && data.craftDetails is list
+        && data.craftDetails.size() <= 30
+        && (data.craftDetails.size() == 0 || (data.craftDetails[0] is map && data.craftDetails[0].title is string))
+        && data.comparisonCases is list
+        && data.comparisonCases.size() <= 20
+        && (data.comparisonCases.size() == 0 || (data.comparisonCases[0] is map && data.comparisonCases[0].id is string))
+        && data.updatedAt == request.time;
+    }
+
+    // Validation Blueprint: /media_index/all
+    function isValidMediaIndex(data) {
+      return data.keys().hasAll(['items', 'updatedAt'])
+        && data.keys().hasOnly(['items', 'updatedAt'])
+        && data.items is list
+        && data.items.size() <= 500
+        && (data.items.size() == 0 || (data.items[0] is map && data.items[0].id is string && data.items[0].filename is string))
+        && data.updatedAt == request.time;
+    }
+
+    // Validation Blueprint: /media/{mediaId}
+    function isValidMediaAsset(data, mediaId) {
+      return data.keys().hasAll([
+          'id',
+          'filename',
+          'mimeType',
+          'dataUrl',
+          'thumbUrl',
+          'sizeBytes',
+          'originalSizeBytes',
+          'width',
+          'height',
+          'uploaderUid',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id',
+          'filename',
+          'mimeType',
+          'dataUrl',
+          'thumbUrl',
+          'sizeBytes',
+          'originalSizeBytes',
+          'width',
+          'height',
+          'uploaderUid',
+          'createdAt'
+        ])
+        && data.id == mediaId
+        && isValidId(data.id)
+        && data.filename is string
+        && data.filename.size() >= 1
+        && data.filename.size() <= 200
+        && data.mimeType in ['image/webp', 'image/jpeg', 'image/png']
+        && data.dataUrl is string
+        && data.dataUrl.size() >= 20
+        && data.dataUrl.size() <= 750000
+        && data.thumbUrl is string
+        && data.thumbUrl.size() >= 20
+        && data.thumbUrl.size() <= 180000
+        && data.sizeBytes is number
+        && data.sizeBytes > 0
+        && data.sizeBytes <= 750000
+        && data.originalSizeBytes is number
+        && data.originalSizeBytes > 0
+        && data.originalSizeBytes <= 50000000
+        && data.width is number
+        && data.width > 0
+        && data.width <= 10000
+        && data.height is number
+        && data.height > 0
+        && data.height <= 10000
+        && data.uploaderUid is string
+        && data.uploaderUid == request.auth.uid
+        && data.createdAt == request.time;
+    }
+
+    // Validation Blueprint: /enquiries/{enquiryId}
+    function isValidEnquiry(data, enquiryId) {
+      return data.keys().hasAll([
+          'id',
+          'orderNumber',
+          'studioTarget',
+          'name',
+          'phone',
+          'email',
+          'projectType',
+          'location',
+          'approxArea',
+          'budget',
+          'timeline',
+          'brief',
+          'status',
+          'internalNote',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id',
+          'orderNumber',
+          'studioTarget',
+          'name',
+          'phone',
+          'email',
+          'projectType',
+          'location',
+          'approxArea',
+          'budget',
+          'timeline',
+          'brief',
+          'status',
+          'internalNote',
+          'createdAt'
+        ])
+        && data.id == enquiryId
+        && isValidId(data.id)
+        && data.orderNumber is string
+        && data.orderNumber.size() >= 3
+        && data.orderNumber.size() <= 32
+        && data.orderNumber.matches('^SM-[A-Z0-9]+$')
+        && data.studioTarget == 'spaces_by_muskan'
+        && data.name is string
+        && data.name.size() >= 1
+        && data.name.size() <= 120
+        && data.phone is string
+        && data.phone.size() >= 3
+        && data.phone.size() <= 40
+        && data.email is string
+        && data.email.size() <= 120
+        && data.projectType is string
+        && data.projectType.size() >= 1
+        && data.projectType.size() <= 120
+        && data.location is string
+        && data.location.size() <= 120
+        && data.approxArea is string
+        && data.approxArea.size() <= 60
+        && data.budget is string
+        && data.budget.size() <= 80
+        && data.timeline is string
+        && data.timeline.size() <= 80
+        && data.brief is string
+        && data.brief.size() <= 2000
+        && data.status in ['new', 'reviewed', 'consultation', 'completed', 'archived']
+        && data.internalNote is string
+        && data.internalNote.size() <= 1500;
+    }
+
+    // 1. Storefront CMS Public State (/cms/public)
+    match /cms/{docId} {
+      allow get: if isValidId(docId) && docId == 'public';
+      allow list: if false;
+      allow create: if isAdmin()
+        && isValidId(docId)
+        && docId == 'public'
+        && isValidCmsPublic(incoming());
+      allow update: if isAdmin()
+        && isValidId(docId)
+        && docId == 'public'
+        && isValidCmsPublic(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'siteConfig',
+          'projects',
+          'services',
+          'processSteps',
+          'craftDetails',
+          'comparisonCases',
+          'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    // 2. Admin Media Index (/media_index/all)
+    match /media_index/{docId} {
+      allow get: if isAdmin() && isValidId(docId) && docId == 'all';
+      allow list: if false;
+      allow create: if isAdmin()
+        && isValidId(docId)
+        && docId == 'all'
+        && isValidMediaIndex(incoming());
+      allow update: if isAdmin()
+        && isValidId(docId)
+        && docId == 'all'
+        && isValidMediaIndex(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['items', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    // 3. Compressed Media Assets (/media/{mediaId})
+    match /media/{mediaId} {
+      allow get: if isValidId(mediaId);
+      allow list: if false;
+      allow create: if isAdmin()
+        && isValidId(mediaId)
+        && isValidMediaAsset(incoming(), mediaId);
+      allow update: if false;
+      allow delete: if isAdmin() && isValidId(mediaId);
+    }
+
+    // 4. Client Consultation Briefs (/enquiries/{enquiryId})
+    match /enquiries/{enquiryId} {
+      allow get: if isAdmin() && isValidId(enquiryId);
+      allow list: if isAdminToken() && resource.data.studioTarget == 'spaces_by_muskan';
+      allow create: if isValidId(enquiryId)
+        && isValidEnquiry(incoming(), enquiryId)
+        && incoming().status == 'new'
+        && incoming().internalNote == ''
+        && incoming().createdAt == request.time;
+      allow update: if isAdmin()
+        && isValidId(enquiryId)
+        && isValidEnquiry(incoming(), enquiryId)
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'internalNote']);
+      allow delete: if isAdmin() && isValidId(enquiryId);
+    }
+
+    // 5. Studio Admin Allowlist (/admins/{uid})
+    match /admins/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && (request.auth.uid == uid || isAdmin());
+      allow list, create, update, delete: if false;
+    }
+
+    // 6. Boot Connection Health Check (/test/connection)
+    match /test/{docId} {
+      allow get: if isValidId(docId) && docId == 'connection';
+      allow list, create, update, delete: if false;
+    }
+  }
+}
