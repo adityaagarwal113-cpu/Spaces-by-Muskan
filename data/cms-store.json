@@ -1,0 +1,465 @@
+{
+  "siteConfig": {
+    "name": "Spaces by Muskan",
+    "shortName": "Spaces by Muskan",
+    "secondaryMark": "Mi Interiors",
+    "founder": "Muskan Agarwal",
+    "monogram": "SM",
+    "discipline": "Interior Design Studio & Vastu Consultancy",
+    "tagline": "Interior Designer & Vastu Consultant · 2D & 3D Spatial Architecture",
+    "heroSubtitle": "Residential · Commercial · Vastu · 2D & 3D Design",
+    "instagramHandle": "@spaces_by_muskan",
+    "instagramUrl": "https://www.instagram.com/spaces_by_muskan/",
+    "youtubeHandle": "@MuskanAgarwal-z5w",
+    "youtubeUrl": "https://www.youtube.com/@MuskanAgarwal-z5w",
+    "phone": "[ADD PHONE]",
+    "whatsappNumber": "[ADD NUMBER]",
+    "email": "[ADD EMAIL]",
+    "address": "[ADD STUDIO ADDRESS]",
+    "googleMapsLink": "#",
+    "responseCommitmentText": "Every project brief is personally reviewed by Muskan Agarwal.",
+    "logoEmblem": "/assets/muskan/logo-emblem.jpg",
+    "heroEyebrow": "Interior Design & Vastu Studio",
+    "heroHeadlineLine1": "Crafting spaces with",
+    "heroHeadlineLine2": "purpose & harmony.",
+    "heroPrimaryCta": "Start a Project",
+    "heroSecondaryCta": "Explore Works",
+    "heroPrimaryImage": "/assets/muskan/bedroom-butterfly.jpg",
+    "heroSecondaryImage": "/assets/muskan/living-eclipse-curved.jpg",
+    "heroSecondaryLabel": "02 · LIVING LOUNGE",
+    "heroSecondaryTitle": "Curved Eclipse Wall",
+    "heroTertiaryImage": "/assets/muskan/bedroom-botanical-scalloped.jpg",
+    "heroTertiaryLabel": "03 · BEDROOM SUITE",
+    "heroTertiaryTitle": "Botanical & Scalloped",
+    "studioIntroEyebrow": "03 · THE STUDIO",
+    "studioIntroHeadline1": "Designed with heart,",
+    "studioIntroHeadline2": "anchored in Vastu.",
+    "studioIntroParagraph1": "Spaces by Muskan crafts distinctive residential and commercial spaces—from signature bedrooms and kitchens to salon, office, and theme environments.",
+    "studioIntroParagraph2": "Led by Interior Designer & Vastu Consultant Muskan Agarwal, every commission pairs AutoCAD 2D working plans and photorealistic SketchUp & V-Ray 3D visualization with hands-on site supervision.",
+    "studioIntroImage": "/assets/muskan/founder-studio-laptop.jpg",
+    "founderPortrait": "/assets/muskan/founder-portrait.jpg",
+    "founderStudioLaptop": "/assets/muskan/founder-studio-laptop.jpg",
+    "founderSiteVisit": "/assets/muskan/founder-site-visit.jpg",
+    "awardPlaque": "/assets/muskan/award-plaque.jpg",
+    "founderSectionHeadline": "Creativity grounded in craft.",
+    "founderBioP1": "Founded by Muskan Agarwal, Spaces by Muskan (also recognized from her atelier mark Mi Interiors) creates expressive, livable interiors across both residential and commercial scales.",
+    "founderBioP2": "Combining Vastu Shastra orientation with AutoCAD working documentation and photorealistic SketchUp & V-Ray visualization, Muskan personally oversees work-in-progress site stages to translate bold ideas into timeless reality.",
+    "finalCtaHeadline1": "Have a space",
+    "finalCtaHeadline2": "to transform?",
+    "finalCtaDescription": "We partner on residential homes, signature bedrooms, modular kitchens, Vastu consultations, commercial offices, and turnkey interiors.",
+    "finalCtaImage": "/assets/muskan/living-eclipse-curved.jpg",
+    "footerStatementLine1": "Thoughtful spaces, 2D & 3D clarity.",
+    "footerStatementLine2": "Designed with Vastu harmony.",
+    "footerDescription": "Residential and commercial interior design studio integrating AutoCAD spatial planning, SketchUp & V-Ray 3D visualization, Vastu consultation, and site supervision.",
+    "storyHighlights": [
+      {
+        "title": "Work in Progress",
+        "label": "Site Supervision & Execution",
+        "image": "/assets/muskan/founder-site-visit.jpg"
+      },
+      {
+        "title": "2D & 3D Design",
+        "label": "AutoCAD, SketchUp & V-Ray",
+        "image": "/assets/muskan/plan-3d-isometric.jpg"
+      },
+      {
+        "title": "Residential",
+        "label": "Bespoke Bedrooms & Living",
+        "image": "/assets/muskan/bedroom-butterfly.jpg"
+      },
+      {
+        "title": "Commercial",
+        "label": "Thematic & Office Spaces",
+        "image": "/assets/muskan/commercial-aviation.jpg"
+      }
+    ]
+  },
+  "projects": [
+    {
+      "id": "butterfly-statement-suite",
+      "sku": "SM-RES-001",
+      "title": "Butterfly Sculpted Master Suite",
+      "category": "Residential Interior",
+      "categorySlug": "bedrooms",
+      "secondaryCategories": [
+        "residential"
+      ],
+      "location": "Residential Commission",
+      "heroImage": "/assets/muskan/bedroom-butterfly.jpg",
+      "galleryImages": [
+        "/assets/muskan/bedroom-butterfly.jpg",
+        "/assets/muskan/bedroom-palm-relief.jpg",
+        "/assets/muskan/bedroom-oak-vitrine.jpg"
+      ],
+      "scope": [
+        "3D Concept & V-Ray Rendering",
+        "Sculptural Bedhead Wall",
+        "Fluted Timber Joinery",
+        "Tray Cove Lighting"
+      ],
+      "materials": [
+        "Chevron Walnut Veneer",
+        "Vertical Fluted Fabric",
+        "Brushed Brass Inlays",
+        "Arched Mirror Panel"
+      ],
+      "dimensions": "16' 0\" × 14' 6\"",
+      "description": "A signature master bedroom anchored by a custom 3D butterfly sculptural relief, warm walnut chevron flanking panels, vertical fluted upholstery, and recessed brass illumination.",
+      "architecturalNotes": "Symmetric backlit mirror recess balanced against dark fluted wardrobe glass shutters and warm 3000K perimeter ceiling trays.",
+      "hasTechnicalDrawing": true,
+      "status": "published",
+      "featured": true,
+      "availability": "Open for Commission",
+      "estimateLabel": "Custom Bespoke Suite"
+    },
+    {
+      "id": "botanical-scalloped-suite",
+      "sku": "SM-RES-002",
+      "title": "Botanical & Scalloped Suite",
+      "category": "Residential Interior",
+      "categorySlug": "bedrooms",
+      "secondaryCategories": [
+        "residential"
+      ],
+      "location": "Bespoke Residence",
+      "heroImage": "/assets/muskan/bedroom-botanical-scalloped.jpg",
+      "galleryImages": [
+        "/assets/muskan/bedroom-botanical-scalloped.jpg",
+        "/assets/muskan/bedroom-sage-wardrobe.jpg",
+        "/assets/muskan/kids-playroom.jpg"
+      ],
+      "scope": [
+        "Custom Twin Headboard",
+        "Botanical Wall Mural",
+        "Pendant Task Lighting",
+        "Vastu-Aligned Layout"
+      ],
+      "materials": [
+        "Upholstered Velvet Pillars",
+        "Botanical Linen Wallpaper",
+        "Matte White Trim",
+        "Warm Brass Sconces"
+      ],
+      "dimensions": "15' 6\" × 13' 0\"",
+      "description": "An expressive dual-bed residence combining custom multi-height scalloped velvet bedheads with a serene botanical mural and warm indirect tray ceiling illumination.",
+      "architecturalNotes": "Custom modular headboard ribs upholstered on-site with curved white piping to echo the botanical foliage silhouette.",
+      "hasTechnicalDrawing": true,
+      "status": "published",
+      "featured": true,
+      "availability": "Open for Commission",
+      "estimateLabel": "Design + Turnkey"
+    },
+    {
+      "id": "eclipse-curved-living",
+      "sku": "SM-LIV-003",
+      "title": "Curved Eclipse Living Lounge",
+      "category": "Living & Spatial Design",
+      "categorySlug": "residential",
+      "secondaryCategories": [
+        "detailing"
+      ],
+      "location": "Residential Living",
+      "heroImage": "/assets/muskan/living-eclipse-curved.jpg",
+      "galleryImages": [
+        "/assets/muskan/living-eclipse-curved.jpg",
+        "/assets/muskan/living-slatted-divider.jpg",
+        "/assets/muskan/detail-walnut-partition.jpg"
+      ],
+      "scope": [
+        "Feature Wall Geometry",
+        "Concealed Cove Curve",
+        "Bespoke Sectional Sofa",
+        "Partition Detailing"
+      ],
+      "materials": [
+        "Veined Statuario Cladding",
+        "Fluted Acoustic Louvers",
+        "Slate Eclipse Relief",
+        "Tan & Taupe Upholstery"
+      ],
+      "description": "A refined contemporary living lounge defined by a continuous curved LED cove sweeping across fluted acoustic panels and a focal eclipse wall installation.",
+      "architecturalNotes": "Curved drywall transition houses an uninterrupted 3000K flexible aluminum light channel separating textured stone and ribbed timber.",
+      "hasTechnicalDrawing": true,
+      "status": "published",
+      "featured": true,
+      "availability": "Open for Commission",
+      "estimateLabel": "Full Living Concept"
+    },
+    {
+      "id": "vitrine-modular-kitchen",
+      "sku": "SM-KIT-004",
+      "title": "Vitrine & Granite Modular Kitchen",
+      "category": "Kitchen Interior",
+      "categorySlug": "kitchens",
+      "secondaryCategories": [
+        "residential"
+      ],
+      "location": "Residential Kitchen",
+      "heroImage": "/assets/muskan/kitchen-vitrine-dining.jpg",
+      "galleryImages": [
+        "/assets/muskan/kitchen-vitrine-dining.jpg",
+        "/assets/muskan/living-slatted-divider.jpg",
+        "/assets/muskan/plan-3d-isometric.jpg"
+      ],
+      "scope": [
+        "Ergonomic Kitchen Zoning",
+        "Backlit Crockery Vitrine",
+        "CNC Partition Screen",
+        "Dining Integration"
+      ],
+      "materials": [
+        "Matte Stone Grey Laminate",
+        "Smoked Fluted Glass",
+        "White Quartz Counters",
+        "Warm Wooden Framing"
+      ],
+      "description": "An open kitchen and dining layout balancing clean matte grey cabinetry, an illuminated glass crockery tower, and an intricate architectural partition screen.",
+      "architecturalNotes": "Designed along Vastu Agni-zone kitchen orientation principles with clear work-triangle clearances and illuminated display vitrines.",
+      "hasTechnicalDrawing": true,
+      "status": "published",
+      "featured": true,
+      "availability": "Turnkey Available",
+      "estimateLabel": "Modular + Dining"
+    },
+    {
+      "id": "aviation-commercial-wing",
+      "sku": "SM-COM-005",
+      "title": "Aviation Cabin Commercial Wing",
+      "category": "Commercial Interior",
+      "categorySlug": "commercial",
+      "secondaryCategories": [
+        "detailing"
+      ],
+      "location": "Commercial Institute",
+      "heroImage": "/assets/muskan/commercial-aviation.jpg",
+      "galleryImages": [
+        "/assets/muskan/commercial-aviation.jpg",
+        "/assets/muskan/commercial-office-workstation.jpg",
+        "/assets/muskan/study-executive.jpg"
+      ],
+      "scope": [
+        "Thematic Spatial Concept",
+        "Porthole Corridor Fabrication",
+        "Acoustic Grid Ceiling",
+        "Waiting & Briefing Lounge"
+      ],
+      "materials": [
+        "Curved Gloss Composite Panels",
+        "Teak Window Trims",
+        "Brushed Steel Framing",
+        "Commercial Vinyl Flooring"
+      ],
+      "description": "A custom-engineered aviation-inspired commercial corridor and waiting bay built to replicate an aircraft fuselage experience with illuminated porthole apertures.",
+      "architecturalNotes": "Curved ribs fabricated in modular sections with recessed perimeter lighting and durable commercial traffic finishes.",
+      "hasTechnicalDrawing": true,
+      "status": "published",
+      "featured": true,
+      "availability": "Open for Commission",
+      "estimateLabel": "Commercial Turnkey"
+    },
+    {
+      "id": "stone-niche-ensuite",
+      "sku": "SM-BTH-006",
+      "title": "Stone & Illuminated Niche Ensuite",
+      "category": "Wet Area Detailing",
+      "categorySlug": "bathrooms",
+      "secondaryCategories": [
+        "residential",
+        "detailing"
+      ],
+      "location": "Residential Ensuite",
+      "heroImage": "/assets/muskan/bathroom-stone-niche.jpg",
+      "galleryImages": [
+        "/assets/muskan/bathroom-stone-niche.jpg",
+        "/assets/muskan/detail-ripple-door.jpg",
+        "/assets/muskan/bedroom-classic-navy.jpg"
+      ],
+      "scope": [
+        "Sanitary Layout & Plumbing",
+        "Large-Format Stone Cladding",
+        "Recessed LED Storage Niche",
+        "Concealed Cistern Framing"
+      ],
+      "materials": [
+        "Warm Veined Grey Marble",
+        "Matte Graphite Fixtures",
+        "Waterproof Mirror Cabinetry",
+        "IP65 Warm Profile LED"
+      ],
+      "dimensions": "9' 0\" × 6' 6\"",
+      "description": "A serene modern ensuite wrapped in full-height veined stone slabs, anchored by a backlit recessed shower niche, cantilevered vanity storage, and matte graphite fittings.",
+      "architecturalNotes": "Drafted with exact waterproof core boxing and concealed cistern framing, paired with 45-degree mitered marble edges around the illuminated niche.",
+      "hasTechnicalDrawing": true,
+      "status": "published",
+      "featured": true,
+      "availability": "Design Package",
+      "estimateLabel": "Sanitary & Stone Spec"
+    }
+  ],
+  "services": [
+    {
+      "id": "srv-residential",
+      "number": "01",
+      "title": "Residential Interiors",
+      "tagline": "Bespoke homes tailored to your family rhythm",
+      "description": "Complete turnkey interior design for independent residences, apartments, signature bedrooms, modular kitchens, and living lounges crafted with bespoke upholstery and statement joinery.",
+      "deliverables": [
+        "Full Home Concept & Execution",
+        "Signature Master & Kids Suites",
+        "Modular Kitchens & Vitrines",
+        "Living & Dining Architecture"
+      ],
+      "image": "/assets/muskan/bedroom-butterfly.jpg",
+      "status": "published"
+    },
+    {
+      "id": "srv-commercial",
+      "number": "02",
+      "title": "Commercial Interiors",
+      "tagline": "Workspaces, salons & thematic commercial design",
+      "description": "Purpose-built commercial studios, corporate multi-workstation offices, salons, and experiential interiors engineered for functional workflow, brand recall, and acoustic clarity.",
+      "deliverables": [
+        "Office Workstations & Cabins",
+        "Salon & Boutique Layouts",
+        "Experiential Theme Spaces",
+        "Acoustic & HVAC Ceilings"
+      ],
+      "image": "/assets/muskan/commercial-office-workstation.jpg",
+      "status": "published"
+    },
+    {
+      "id": "srv-vastu",
+      "number": "03",
+      "title": "Vastu Consultation & Zoning",
+      "tagline": "Traditional energy harmony in modern layouts",
+      "description": "Vastu-conscious floor planning and directional zoning integrated seamlessly into contemporary residential and commercial designs for natural light, airflow, and balanced living.",
+      "deliverables": [
+        "Directional Room Zoning",
+        "Kitchen & Master Orientation",
+        "Entrance & Living Alignment",
+        "Practical Remedial Layouts"
+      ],
+      "image": "/assets/muskan/bedroom-botanical-scalloped.jpg",
+      "vastuIncluded": true,
+      "status": "published"
+    },
+    {
+      "id": "srv-2d-cad",
+      "number": "04",
+      "title": "2D CAD & Working Drawings",
+      "tagline": "AutoCAD precision before work begins on site",
+      "description": "Detailed 2D floor plans, furniture layouts, salon/commercial station zoning, electrical switchboard heights, ceiling grids, and custom carpentry drawings for zero site ambiguity.",
+      "deliverables": [
+        "2D Furniture & Partition CAD",
+        "Electrical & False Ceiling Plans",
+        "Plumbing & Tiling Grids",
+        "Joinery Fabrication Drawings"
+      ],
+      "image": "/assets/muskan/plan-2d-salon.jpg",
+      "status": "published"
+    },
+    {
+      "id": "srv-3d-viz",
+      "number": "05",
+      "title": "3D Visualization (SketchUp & V-Ray)",
+      "tagline": "Photorealistic spatial renders & cutaway plans",
+      "description": "High-definition 3D interior perspectives and 3D isometric cutaway floor plans produced in SketchUp, V-Ray, and 3ds Max so every texture and light angle is previewed before execution.",
+      "deliverables": [
+        "3D Isometric Floor Plans",
+        "Photorealistic V-Ray Renders",
+        "Lighting & Material Studies",
+        "Theme Room Prototyping"
+      ],
+      "image": "/assets/muskan/plan-3d-isometric.jpg",
+      "status": "published"
+    },
+    {
+      "id": "srv-supervision",
+      "number": "06",
+      "title": "Site Supervision & Turnkey Work",
+      "tagline": "Hands-on monitoring from bare site to handover",
+      "description": "Regular on-site walkthroughs led by Muskan Agarwal—coordinating carpenters, POP teams, marble masons, and painters to translate approved 3D concepts into finished rooms.",
+      "deliverables": [
+        "Work-in-Progress Inspections",
+        "Material & Laminate Sourcing",
+        "Carpenter & Mason Alignment",
+        "Final Styling & Handover"
+      ],
+      "image": "/assets/muskan/founder-site-visit.jpg",
+      "status": "published"
+    }
+  ],
+  "processSteps": [
+    {
+      "number": "01",
+      "title": "Discover",
+      "subtitle": "Client Brief & Site Audit",
+      "description": "Understanding family lifestyle, commercial goals, site measurements, and Vastu orientation preferences.",
+      "focus": "Site dimensions, lifestyle brief & directional orientation"
+    },
+    {
+      "number": "02",
+      "title": "Plan (2D)",
+      "subtitle": "AutoCAD Space & Vastu Zoning",
+      "description": "Drafting optimized 2D floor layouts, circulation clearances, and Vastu-balanced room placements.",
+      "focus": "AutoCAD layouts, ergonomics & Vastu alignment"
+    },
+    {
+      "number": "03",
+      "title": "Visualize (3D)",
+      "subtitle": "SketchUp, V-Ray & 3ds Max",
+      "description": "Bringing your rooms to life in photorealistic 3D views and isometric cutaways with accurate lighting and finishes.",
+      "focus": "3D perspectives, material palettes & ceiling lighting"
+    },
+    {
+      "number": "04",
+      "title": "Detail",
+      "subtitle": "Working CAD & Joinery Specs",
+      "description": "Issuing exact 2D construction drawings for false ceilings, electrical points, sanitary niches, and bespoke furniture.",
+      "focus": "Construction elevations, hardware & millwork sheets"
+    },
+    {
+      "number": "05",
+      "title": "Realize",
+      "subtitle": "On-Site Supervision & Handover",
+      "description": "Active work-in-progress site coordination with craftsmen to deliver refined, long-lasting interiors.",
+      "focus": "Site inspections, quality checks & final reveal"
+    }
+  ],
+  "craftDetails": [
+    {
+      "id": "sculptural-doors",
+      "title": "Concentric Ripple Statement Doors",
+      "category": "Custom Joinery",
+      "description": "CNC-carved concentric ripple flush doors paired with brushed metal levers, turning transitional corridors into sculptural moments.",
+      "specifications": "Custom CNC Relief Routing · Matte Satin Finish · Concealed Hinges",
+      "image": "/assets/muskan/detail-ripple-door.jpg"
+    },
+    {
+      "id": "curved-cove-living",
+      "title": "Sweeping Cove Walls & Fluted Stone",
+      "category": "Architectural Lighting",
+      "description": "Curved drywall channels concealing continuous 3000K LED strips that wash vertical ribbed paneling and veined stone slabs.",
+      "specifications": "Warm 3000K Linear Diffuser · Fluted MDF/Timber · Brass Inlays",
+      "image": "/assets/muskan/living-eclipse-curved.jpg"
+    },
+    {
+      "id": "walnut-partitions",
+      "title": "Architectural Walnut Room Dividers",
+      "category": "Space Zoning",
+      "description": "Asymmetric geometric timber display partitions that separate kitchen, dining, and living zones without blocking daylight.",
+      "specifications": "High-Gloss Walnut Veneer · Concealed Joinery · Integrated Shelving",
+      "image": "/assets/muskan/detail-walnut-partition.jpg"
+    },
+    {
+      "id": "slatted-ceilings",
+      "title": "Slatted Wood Commercial Ceilings",
+      "category": "Commercial Craft",
+      "description": "Bespoke linear timber-finished ceilings engineered around cassette AC grilles and linear task lighting in multi-desk studios.",
+      "specifications": "Linear Timber Louvers · Cassette HVAC Integration · Glare-Free Task Grid",
+      "image": "/assets/muskan/commercial-office-workstation.jpg"
+    }
+  ],
+  "enquiries": [],
+  "updatedAt": "2026-11-24T19:15:31.440Z"
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Spaces by Muskan",
+  "description": "Residential and commercial interior design studio, Vastu consultation, 2D spatial planning, and 3D visualization led by Muskan Agarwal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

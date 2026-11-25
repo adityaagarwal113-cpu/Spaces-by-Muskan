@@ -1,0 +1,219 @@
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Cormorant Garamond", Garamond, Georgia, serif;
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --color-stone-canvas: #F6F3EE;
+  --color-stone-paper: #FBF9F6;
+  --color-stone-surface: #EDE8DF;
+  --color-stone-border: #DFD8CE;
+  --color-stone-muted: #6B655E;
+  --color-charcoal-deep: #181615;
+  --color-charcoal-soft: #262320;
+  --color-clay-brand: #8E4A36;
+  --color-clay-dark: #733928;
+  --color-brass-accent: #A38452;
+}
+
+:root {
+  --ease-luxury: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-smooth: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --duration-fast: 240ms;
+  --duration-medium: 650ms;
+  --duration-slow: 1100ms;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--color-stone-canvas);
+    color: var(--color-charcoal-deep);
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, .font-editorial {
+    font-family: var(--font-serif);
+    font-feature-settings: "liga" 1, "kern" 1;
+    text-wrap: balance;
+  }
+}
+
+/* Thin, non-intrusive architectural scrollbar (4px) */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(142, 74, 54, 0.42) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(142, 74, 54, 0.38);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(142, 74, 54, 0.72);
+}
+
+/* Accessible focus ring */
+:focus-visible {
+  outline: 2px solid var(--color-clay-brand);
+  outline-offset: 2px;
+}
+
+/* Editorial motion helpers */
+.reveal-container {
+  overflow: hidden;
+}
+
+.project-card-hover {
+  position: relative;
+  overflow: hidden;
+}
+
+.project-card-hover img {
+  transform: scale(1);
+  transition: transform 1.05s var(--ease-luxury);
+}
+
+.project-card-hover:hover img {
+  transform: scale(1.035);
+}
+
+/* Refined nav link hairline underline */
+.nav-link-animated {
+  position: relative;
+}
+.nav-link-animated::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 0%;
+  height: 1px;
+  background-color: var(--color-clay-brand);
+  transition: width 0.3s var(--ease-luxury);
+}
+.nav-link-animated:hover::after,
+.nav-link-animated.active::after {
+  width: 100%;
+}
+
+/* Dynamic typography pairings scoped to storefront-shell so /wp-admin stays crisp */
+#storefront-shell {
+  font-family: var(--font-sans);
+  background-color: var(--color-stone-canvas);
+}
+
+#storefront-shell h1,
+#storefront-shell h2,
+#storefront-shell h3,
+#storefront-shell .font-serif,
+#storefront-shell .font-editorial {
+  font-family: var(--font-serif);
+}
+
+#storefront-shell .font-sans {
+  font-family: var(--font-sans);
+}
+
+/* Dynamic accent presets & custom hex colors controlled from /wp-admin */
+html[data-accent]:not([data-accent="terracotta"]) .text-\[\#8E4A36\],
+html[data-accent]:not([data-accent="terracotta"]) .hover\:text-\[\#8E4A36\]:hover,
+html[data-accent]:not([data-accent="terracotta"]) .group:hover .group-hover\:text-\[\#8E4A36\] {
+  color: var(--color-clay-brand) !important;
+}
+
+html[data-accent]:not([data-accent="terracotta"]) .bg-\[\#8E4A36\],
+html[data-accent]:not([data-accent="terracotta"]) .hover\:bg-\[\#8E4A36\]:hover,
+html[data-accent]:not([data-accent="terracotta"]) .group:hover .group-hover\:bg-\[\#8E4A36\] {
+  background-color: var(--color-clay-brand) !important;
+}
+
+html[data-accent]:not([data-accent="terracotta"]) .hover\:bg-\[\#733928\]:hover {
+  background-color: var(--color-clay-dark) !important;
+}
+
+html[data-accent]:not([data-accent="terracotta"]) .border-\[\#8E4A36\],
+html[data-accent]:not([data-accent="terracotta"]) .hover\:border-\[\#8E4A36\]:hover,
+html[data-accent]:not([data-accent="terracotta"]) .focus\:border-\[\#8E4A36\]:focus,
+html[data-accent]:not([data-accent="terracotta"]) .group:hover .group-hover\:border-\[\#8E4A36\] {
+  border-color: var(--color-clay-brand) !important;
+}
+
+html[data-accent]:not([data-accent="terracotta"]) #storefront-shell .bg-\[\#F6F3EE\] {
+  background-color: var(--color-stone-canvas) !important;
+}
+
+html[data-accent]:not([data-accent="terracotta"]) .text-\[\#D5A38C\] {
+  color: var(--color-clay-soft) !important;
+}
+
+/* Layout spacing density themes */
+html[data-spacing="compact"] #storefront-shell main section:not(:first-of-type) {
+  padding-top: 3.25rem !important;
+  padding-bottom: 3.25rem !important;
+}
+
+@media (min-width: 1024px) {
+  html[data-spacing="compact"] #storefront-shell main section:not(:first-of-type) {
+    padding-top: 4.25rem !important;
+    padding-bottom: 4.25rem !important;
+  }
+}
+
+html[data-spacing="expansive"] #storefront-shell main section:not(:first-of-type) {
+  padding-top: 6rem !important;
+  padding-bottom: 6rem !important;
+}
+
+@media (min-width: 1024px) {
+  html[data-spacing="expansive"] #storefront-shell main section:not(:first-of-type) {
+    padding-top: 8.75rem !important;
+    padding-bottom: 8.75rem !important;
+  }
+}
+
+/* Hide horizontal scrollbar on custom filmstrips while preserving scroll */
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+@keyframes sbm-marquee {
+  0% {
+    transform: translate3d(0%, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.animate-sbm-marquee {
+  animation-name: sbm-marquee;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
